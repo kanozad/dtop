@@ -1,0 +1,22 @@
+# Example configuration for dtop
+# Default location: ~/.config/dtop/dtop.conf (legacy: dtop.toml)
+
+# How often collectors should refresh.
+update_interval = "2s"
+
+[theme]
+# Theme name. "default" uses the built-in theme.
+# Custom themes live at ~/.config/dtop/themes/<name>.toml
+# <name> must match: [a-z0-9][a-z0-9_-]*
+# See docs/theme-schema.md for the full theme schema.
+name = "default"
+
+[plugins]
+# Enable plugins by id.
+enabled = ["clock"]
+
+# Per-plugin configuration is stored under plugins.config.<plugin_id>
+[plugins.config]
+
+[plugins.config.clock]
+# No options yet.

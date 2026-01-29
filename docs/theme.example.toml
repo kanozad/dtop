@@ -1,0 +1,25 @@
+# Example theme file for DTOP
+# Save as ~/.config/dtop/themes/<name>.toml
+
+[header]
+fg = "15"
+bold = true
+
+[text]
+fg = "7"
+
+[muted]
+fg = "8"
+
+[error]
+fg = "9"
+bold = true
+
+[box]
+border = "rounded"
+border_fg = "8"
+padding_y = 0
+padding_x = 1
+
+[box_title]
+bold = true
