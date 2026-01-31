@@ -13,10 +13,57 @@ name = "default"
 
 [plugins]
 # Enable plugins by id.
-enabled = ["clock"]
+enabled = ["clock", "cpu", "memory", "network", "process"]
 
 # Per-plugin configuration is stored under plugins.config.<plugin_id>
 [plugins.config]
 
 [plugins.config.clock]
 # No options yet.
+
+[plugins.config.cpu]
+# Show per-core utilization lines.
+per_core = true
+
+# Attempt to read CPU temperature (Linux).
+show_temp = false
+
+[plugins.config.memory]
+# Show swap usage.
+show_swap = true
+
+# Show disk capacity and usage.
+show_disks = true
+
+# Show disk I/O statistics (read/write rates).
+show_io_stat = true
+
+# Use base-10 sizes (KB, MB, GB) instead of base-1024 (KiB, MiB, GiB).
+base_10_sizes = false
+
+# Include ZFS ARC cache size (Linux only, if ZFS is present).
+zfs_arc_cached = false
+
+# Filter disks by mount point (optional). If empty, shows all physical filesystems.
+# Example: disks_filter = ["/", "/home"]
+# disks_filter = []
+
+[plugins.config.network]
+# Interface name to monitor (empty selects the first non-loopback interface).
+interface = ""
+
+# Show IPv6 addresses (if present).
+show_ipv6 = true
+
+[plugins.config.process]
+# Show process tree view with parent-child relationships.
+tree_view = false
+
+# Sort processes by: pid, name, cpu, mem, threads, user.
+sort_by = "cpu"
+
+# Filter processes by name or command (case-insensitive substring match).
+# filter = "python"
+
+# Maximum number of processes to display (0 = unlimited).
+max_display = 20

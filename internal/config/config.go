@@ -51,7 +51,7 @@ func Default() Config {
 			Name: "default",
 		},
 		Plugins: PluginsConfig{
-			Enabled: []string{"clock"},
+			Enabled: []string{"clock", "cpu"},
 			Config:  map[string]map[string]any{},
 		},
 	}

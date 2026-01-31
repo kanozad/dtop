@@ -20,7 +20,7 @@ type registryPlugin struct {
 	receivedCfg map[string]any
 }
 
-func (p *registryPlugin) ID() ID   { return p.id }
+func (p *registryPlugin) ID() ID       { return p.id }
 func (p *registryPlugin) Name() string { return p.name }
 func (p *registryPlugin) AllowedConfigKeys() []string {
 	return p.allowed

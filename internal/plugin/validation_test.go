@@ -17,7 +17,7 @@ type stubPlugin struct {
 	shutdownErr error
 }
 
-func (p *stubPlugin) ID() ID   { return p.id }
+func (p *stubPlugin) ID() ID       { return p.id }
 func (p *stubPlugin) Name() string { return p.name }
 func (p *stubPlugin) Init(context.Context, map[string]any) error {
 	return nil

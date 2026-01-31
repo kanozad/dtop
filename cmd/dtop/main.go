@@ -10,6 +10,10 @@ import (
 	"mld.com/dtop/internal/config"
 	"mld.com/dtop/internal/plugin"
 	"mld.com/dtop/plugins/clock"
+	"mld.com/dtop/plugins/cpu"
+	"mld.com/dtop/plugins/memory"
+	"mld.com/dtop/plugins/network"
+	"mld.com/dtop/plugins/process"
 )
 
 func main() {
@@ -26,6 +30,22 @@ func main() {
 	ctx := context.Background()
 	reg := plugin.NewRegistry()
 	if err := reg.Register(func() plugin.Plugin { return clock.New() }); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := reg.Register(func() plugin.Plugin { return cpu.New() }); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := reg.Register(func() plugin.Plugin { return memory.New() }); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := reg.Register(func() plugin.Plugin { return network.New() }); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := reg.Register(func() plugin.Plugin { return process.New() }); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

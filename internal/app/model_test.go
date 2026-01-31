@@ -19,8 +19,8 @@ type modelPlugin struct {
 	name string
 }
 
-func (p *modelPlugin) ID() plugin.ID   { return p.id }
-func (p *modelPlugin) Name() string { return p.name }
+func (p *modelPlugin) ID() plugin.ID { return p.id }
+func (p *modelPlugin) Name() string  { return p.name }
 func (p *modelPlugin) Init(context.Context, map[string]any) error {
 	return nil
 }
