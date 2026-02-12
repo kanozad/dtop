@@ -31,6 +31,7 @@ An example config lives at `docs/dtop.toml.example`.
 
 - Global interval: `update_interval = "2s"`
 - Theme: `theme.name = "default"` (custom themes in `~/.config/dtop/themes/<name>.toml`)
+- Layout: `layout.mode` ("grid", "flow", "vertical"); `layout.columns` sets fixed columns for grid mode
 - Plugins: list in `plugins.enabled`, config under `plugins.config.<plugin_id>`
 
 CPU plugin options:
@@ -44,6 +45,10 @@ Process plugin options:
 - `sort_by` (string): sort by pid, name, cpu, mem, threads, or user
 - `filter` (string): filter processes by name/command (case-insensitive)
 - `max_display` (int): maximum number of processes to display
+- `follow_pid` (int): follow a specific PID on startup (0 disables)
+- `use_smaps` (bool): use /proc/[pid]/smaps for detailed memory (slower)
+
+Process list controls: up/down to move selection (">" indicator), PgUp/PgDown to page, `f` to follow, `c` to collapse/expand, `x`/`X` to send SIGTERM/SIGKILL, `r`/`R` to renice +1/-1. Signal/renice actions are permission-gated and will report errors in the header.
 
 ## Tests and formatting
 

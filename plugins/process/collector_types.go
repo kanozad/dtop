@@ -11,6 +11,8 @@ type procStat struct {
 
 // systemStat holds overall system CPU time for calculating CPU percentages.
 type systemStat struct {
-	totalTime uint64 // Total CPU time across all CPUs
-	timestamp time.Time
+	totalTime  uint64 // Total CPU time across all CPUs
+	timestamp  time.Time
+	bootTime   time.Time
+	clockTicks int64
 }

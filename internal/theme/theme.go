@@ -37,21 +37,33 @@ type boxConfig struct {
 }
 
 type themeConfig struct {
-	Header   styleConfig `toml:"header"`
-	Text     styleConfig `toml:"text"`
-	Muted    styleConfig `toml:"muted"`
-	Error    styleConfig `toml:"error"`
-	Box      boxConfig   `toml:"box"`
-	BoxTitle styleConfig `toml:"box_title"`
+	Header     styleConfig `toml:"header"`
+	Text       styleConfig `toml:"text"`
+	Muted      styleConfig `toml:"muted"`
+	Error      styleConfig `toml:"error"`
+	Box        boxConfig   `toml:"box"`
+	BoxTitle   styleConfig `toml:"box_title"`
+	GraphCPU   styleConfig `toml:"graph_cpu"`
+	GraphMem   styleConfig `toml:"graph_mem"`
+	GraphNet   styleConfig `toml:"graph_net"`
+	MeterFill  styleConfig `toml:"meter_fill"`
+	MeterEmpty styleConfig `toml:"meter_empty"`
+	Highlight  styleConfig `toml:"highlight"`
 }
 
 type Theme struct {
-	Header   lipgloss.Style
-	Text     lipgloss.Style
-	Muted    lipgloss.Style
-	Error    lipgloss.Style
-	Box      lipgloss.Style
-	BoxTitle lipgloss.Style
+	Header     lipgloss.Style
+	Text       lipgloss.Style
+	Muted      lipgloss.Style
+	Error      lipgloss.Style
+	Box        lipgloss.Style
+	BoxTitle   lipgloss.Style
+	GraphCPU   lipgloss.Style
+	GraphMem   lipgloss.Style
+	GraphNet   lipgloss.Style
+	MeterFill  lipgloss.Style
+	MeterEmpty lipgloss.Style
+	Highlight  lipgloss.Style
 }
 
 func Default() Theme {
@@ -65,7 +77,13 @@ func Default() Theme {
 			Border(boxBorder).
 			BorderForeground(lipgloss.Color("8")).
 			Padding(0, 1),
-		BoxTitle: lipgloss.NewStyle().Bold(true),
+		BoxTitle:   lipgloss.NewStyle().Bold(true),
+		GraphCPU:   lipgloss.NewStyle().Foreground(lipgloss.Color("#5fd7ff")),
+		GraphMem:   lipgloss.NewStyle().Foreground(lipgloss.Color("#d7af5f")),
+		GraphNet:   lipgloss.NewStyle().Foreground(lipgloss.Color("#87d787")),
+		MeterFill:  lipgloss.NewStyle().Foreground(lipgloss.Color("#5fafff")),
+		MeterEmpty: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		Highlight:  lipgloss.NewStyle().Bold(true).Reverse(true),
 	}
 }
 
@@ -101,8 +119,26 @@ func FromName(name string) (Theme, error) {
 	applyStyle(&th.Error, cfg.Error)
 	applyBox(&th.Box, cfg.Box)
 	applyStyle(&th.BoxTitle, cfg.BoxTitle)
+	applyStyle(&th.GraphCPU, cfg.GraphCPU)
+	applyStyle(&th.GraphMem, cfg.GraphMem)
+	applyStyle(&th.GraphNet, cfg.GraphNet)
+	applyStyle(&th.MeterFill, cfg.MeterFill)
+	applyStyle(&th.MeterEmpty, cfg.MeterEmpty)
+	applyStyle(&th.Highlight, cfg.Highlight)
 	return th, nil
 }
+
+// BoxChrome returns the total vertical and horizontal non-content overhead
+// added by RenderBox (border + padding). Callers use this to reserve space
+// for box chrome when splitting heights/widths across multiple boxes.
+func (t Theme) BoxChrome() (vertical, horizontal int) {
+	v := t.Box.GetBorderTopSize() + t.Box.GetBorderBottomSize() +
+		t.Box.GetPaddingTop() + t.Box.GetPaddingBottom()
+	h := t.Box.GetBorderLeftSize() + t.Box.GetBorderRightSize() +
+		t.Box.GetPaddingLeft() + t.Box.GetPaddingRight()
+	return v, h
+}
+
 func (t Theme) RenderBox(title, body string, width, height int) string {
 	content := strings.TrimRight(body, "\n")
 	if title != "" {

@@ -11,6 +11,13 @@ update_interval = "2s"
 # See docs/theme-schema.md for the full theme schema.
 name = "default"
 
+[layout]
+# Layout mode: "grid" (fixed multi-column), "flow" (auto columns), or "vertical" (single column stack).
+mode = "grid"
+
+# Number of columns in grid mode.
+columns = 2
+
 [plugins]
 # Enable plugins by id.
 enabled = ["clock", "cpu", "memory", "network", "process"]
@@ -67,3 +74,9 @@ sort_by = "cpu"
 
 # Maximum number of processes to display (0 = unlimited).
 max_display = 20
+
+# Follow a specific PID on startup (0 disables).
+# follow_pid = 1234
+
+# Use /proc/[pid]/smaps for detailed memory (slower).
+use_smaps = false

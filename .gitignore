@@ -1,0 +1,9 @@
+# IDE / editor
+*.sublime-workspace
+*.sublime-project
+
+# Go
+/dtop
+*.exe
+*.test
+*.out

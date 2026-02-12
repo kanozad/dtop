@@ -189,3 +189,50 @@ func TestFormatBytes(t *testing.T) {
 		})
 	}
 }
+
+func TestFilterFollow(t *testing.T) {
+	processes := []types.ProcessInfo{
+		{PID: 1, PPID: 0, Command: "init"},
+		{PID: 10, PPID: 1, Command: "child1"},
+		{PID: 11, PPID: 1, Command: "child2"},
+		{PID: 100, PPID: 10, Command: "grandchild1"},
+		{PID: 101, PPID: 10, Command: "grandchild2"},
+	}
+	tree := buildProcessTree(processes)
+
+	filtered := filterFollow(tree, 10, true)
+	if len(filtered) != 3 {
+		t.Fatalf("expected 3 processes, got %d", len(filtered))
+	}
+	if filtered[0].PID != 10 || filtered[1].PID != 100 || filtered[2].PID != 101 {
+		t.Fatalf("unexpected follow order: %+v", filtered)
+	}
+
+	single := filterFollow(tree, 10, false)
+	if len(single) != 1 || single[0].PID != 10 {
+		t.Fatalf("expected single PID 10, got %+v", single)
+	}
+}
+
+func TestApplyTreeCollapse(t *testing.T) {
+	processes := []types.ProcessInfo{
+		{PID: 1, PPID: 0, Command: "init"},
+		{PID: 10, PPID: 1, Command: "child1"},
+		{PID: 11, PPID: 1, Command: "child2"},
+		{PID: 100, PPID: 10, Command: "grandchild1"},
+		{PID: 101, PPID: 10, Command: "grandchild2"},
+	}
+	tree := buildProcessTree(processes)
+	collapsed := map[int]struct{}{10: {}}
+
+	result := applyTreeCollapse(tree, collapsed)
+	if len(result) != 3 {
+		t.Fatalf("expected 3 processes after collapse, got %d", len(result))
+	}
+	if result[1].PID != 10 || !result[1].TreeCollapsed {
+		t.Fatalf("expected PID 10 collapsed, got %+v", result[1])
+	}
+	if result[2].PID != 11 {
+		t.Fatalf("expected PID 11 after collapsed subtree, got %+v", result[2])
+	}
+}

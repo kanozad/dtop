@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -32,7 +33,7 @@ func readProcessStats(prevProc map[int]procStat, prevSys systemStat, cfg Config)
 	}
 
 	// Read all processes from /proc
-	processes, nextProc, err := collectProcesses(prevProc, prevSys, sysStat)
+	processes, nextProc, err := collectProcesses(prevProc, prevSys, sysStat, cfg.UseSmaps)
 	if err != nil {
 		return stats, prevProc, prevSys, err
 	}
@@ -53,11 +54,6 @@ func readProcessStats(prevProc map[int]procStat, prevSys systemStat, cfg Config)
 		processes = buildProcessTree(processes)
 	}
 
-	// Limit display count
-	if cfg.MaxDisplay > 0 && len(processes) > cfg.MaxDisplay {
-		processes = processes[:cfg.MaxDisplay]
-	}
-
 	stats.Processes = processes
 
 	return stats, nextProc, sysStat, nil
@@ -72,38 +68,77 @@ func readSystemCPU() (systemStat, error) {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
-	if !scanner.Scan() {
-		return systemStat{}, fmt.Errorf("failed to read /proc/stat")
-	}
-
-	line := scanner.Text()
-	if !strings.HasPrefix(line, "cpu ") {
-		return systemStat{}, fmt.Errorf("unexpected /proc/stat format")
-	}
-
-	fields := strings.Fields(line)
-	if len(fields) < 8 {
-		return systemStat{}, fmt.Errorf("insufficient fields in /proc/stat")
-	}
-
-	// Sum all CPU time fields (user, nice, system, idle, iowait, irq, softirq, steal)
 	var total uint64
-	for i := 1; i < len(fields); i++ {
-		val, err := strconv.ParseUint(fields[i], 10, 64)
-		if err != nil {
+	var haveCPU bool
+	var bootTime time.Time
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "cpu ") {
+			fields := strings.Fields(line)
+			if len(fields) < 8 {
+				return systemStat{}, fmt.Errorf("insufficient fields in /proc/stat")
+			}
+			for i := 1; i < len(fields); i++ {
+				val, err := strconv.ParseUint(fields[i], 10, 64)
+				if err != nil {
+					continue
+				}
+				total += val
+			}
+			haveCPU = true
 			continue
 		}
-		total += val
+		if strings.HasPrefix(line, "btime ") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				if secs, err := strconv.ParseInt(fields[1], 10, 64); err == nil {
+					bootTime = time.Unix(secs, 0)
+				}
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return systemStat{}, err
+	}
+	if !haveCPU {
+		return systemStat{}, fmt.Errorf("unexpected /proc/stat format")
+	}
+	var uptime time.Duration
+	if up, err := readSystemUptime(); err == nil {
+		uptime = up
+	}
+	if bootTime.IsZero() && uptime > 0 {
+		bootTime = time.Now().Add(-uptime)
+	}
+	var clockTicks int64
+	if uptime > 0 {
+		seconds := uptime.Seconds()
+		if seconds > 0 {
+			cpuCount := runtime.NumCPU()
+			if cpuCount < 1 {
+				cpuCount = 1
+			}
+			hz := float64(total) / (seconds * float64(cpuCount))
+			if hz > 0 {
+				clockTicks = int64(hz + 0.5)
+			}
+		}
+	}
+	if clockTicks <= 0 {
+		clockTicks = 100
 	}
 
 	return systemStat{
-		totalTime: total,
-		timestamp: time.Now(),
+		totalTime:  total,
+		timestamp:  time.Now(),
+		bootTime:   bootTime,
+		clockTicks: clockTicks,
 	}, nil
 }
 
 // collectProcesses reads all processes from /proc and calculates CPU percentages.
-func collectProcesses(prevProc map[int]procStat, prevSys systemStat, curSys systemStat) ([]types.ProcessInfo, map[int]procStat, error) {
+func collectProcesses(prevProc map[int]procStat, prevSys systemStat, curSys systemStat, useSmaps bool) ([]types.ProcessInfo, map[int]procStat, error) {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		return nil, nil, err
@@ -129,7 +164,7 @@ func collectProcesses(prevProc map[int]procStat, prevSys systemStat, curSys syst
 			continue
 		}
 
-		proc, curStat, err := readProcInfo(pid, prevProc, sysDelta)
+		proc, curStat, err := readProcInfo(pid, prevProc, sysDelta, curSys, useSmaps)
 		if err != nil {
 			// Process may have exited, skip
 			continue
@@ -143,11 +178,11 @@ func collectProcesses(prevProc map[int]procStat, prevSys systemStat, curSys syst
 }
 
 // readProcInfo reads information for a single process.
-func readProcInfo(pid int, prevProc map[int]procStat, sysDelta float64) (types.ProcessInfo, procStat, error) {
+func readProcInfo(pid int, prevProc map[int]procStat, sysDelta float64, curSys systemStat, useSmaps bool) (types.ProcessInfo, procStat, error) {
 	procPath := filepath.Join("/proc", strconv.Itoa(pid))
 
 	// Read /proc/[pid]/stat for most information
-	stat, curStat, err := readProcStat(procPath)
+	stat, curStat, err := readProcStat(procPath, curSys.bootTime, curSys.clockTicks)
 	if err != nil {
 		return types.ProcessInfo{}, procStat{}, err
 	}
@@ -178,8 +213,13 @@ func readProcInfo(pid int, prevProc map[int]procStat, sysDelta float64) (types.P
 		command = filepath.Base(strings.Fields(cmdline)[0])
 	}
 
-	// Parse memory from status
+	// Parse memory from status, optionally override with smaps
 	memBytes := parseMemory(status)
+	if useSmaps {
+		if smapsBytes, err := readProcSmaps(procPath); err == nil && smapsBytes > 0 {
+			memBytes = smapsBytes
+		}
+	}
 
 	proc := types.ProcessInfo{
 		PID:        pid,
@@ -213,7 +253,7 @@ type statInfo struct {
 }
 
 // readProcStat parses /proc/[pid]/stat.
-func readProcStat(procPath string) (statInfo, procStat, error) {
+func readProcStat(procPath string, bootTime time.Time, clockTicks int64) (statInfo, procStat, error) {
 	data, err := os.ReadFile(filepath.Join(procPath, "stat"))
 	if err != nil {
 		return statInfo{}, procStat{}, err
@@ -265,9 +305,15 @@ func readProcStat(procPath string) (statInfo, procStat, error) {
 		}
 	}
 
-	// Convert starttime (jiffies since boot) to actual time
-	// This is approximate - requires reading /proc/uptime and boot time
-	startTime := time.Now().Add(-time.Duration(starttime) * time.Millisecond / 100) // Rough approximation
+	// Convert starttime (clock ticks since boot) to actual time
+	startTime := time.Time{}
+	if !bootTime.IsZero() && clockTicks > 0 {
+		seconds := float64(starttime) / float64(clockTicks)
+		startTime = bootTime.Add(time.Duration(seconds * float64(time.Second)))
+	} else if clockTicks > 0 {
+		seconds := float64(starttime) / float64(clockTicks)
+		startTime = time.Now().Add(-time.Duration(seconds * float64(time.Second)))
+	}
 
 	info := statInfo{
 		pid:        pid,
@@ -345,4 +391,71 @@ func parseMemory(status map[string]string) uint64 {
 		}
 	}
 	return 0
+}
+
+func readSystemUptime() (time.Duration, error) {
+	data, err := os.ReadFile("/proc/uptime")
+	if err != nil {
+		return 0, err
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) == 0 {
+		return 0, fmt.Errorf("invalid /proc/uptime format")
+	}
+	seconds, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil {
+		return 0, err
+	}
+	return time.Duration(seconds * float64(time.Second)), nil
+}
+
+func readProcSmaps(procPath string) (uint64, error) {
+	file, err := os.Open(filepath.Join(procPath, "smaps"))
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	var pss uint64
+	var rss uint64
+	var havePss bool
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "Pss:") {
+			if val, ok := parseSmapsValue(line); ok {
+				pss += val
+				havePss = true
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "Rss:") {
+			if val, ok := parseSmapsValue(line); ok {
+				rss += val
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return 0, err
+	}
+	if havePss {
+		return pss * 1024, nil
+	}
+	if rss > 0 {
+		return rss * 1024, nil
+	}
+	return 0, nil
+}
+
+func parseSmapsValue(line string) (uint64, bool) {
+	fields := strings.Fields(line)
+	if len(fields) < 2 {
+		return 0, false
+	}
+	val, err := strconv.ParseUint(fields[1], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return val, true
 }

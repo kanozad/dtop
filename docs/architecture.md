@@ -21,11 +21,22 @@ This document summarizes the major components and data flow in DTOP, aligned wit
 - Errors are attached to the plugin snapshot, not global state, to avoid overwriting unrelated modules.
 
 ## UI loop and rendering
-- Layout currently vertical via `internal/ui.SplitHeights`; future layouts should still enforce per‑box minimums and hide boxes that do not fit.
+- Layout supports vertical, grid, and flow modes via `internal/ui` helpers; flow auto-computes columns to fit height while enforcing per-box minimums.
+- Box chrome accounting: each plugin box has non-content overhead (border + padding) exposed via `Theme.BoxChrome()`. The layout engine subtracts `vChrome * boxCount` from the height budget before splitting, so the rendered boxes (content + chrome) fit the terminal exactly. Plugins that would receive fewer than `minPluginHeight` content rows are hidden, and a muted warning is displayed.
 - Render order: clear region → borders → text/graphs → highlights → flush; prefer alt‑screen and synchronized output when supported.
 - Graphs auto‑scale; net graphs never below 10 KiB/s; clamp history length to drawn width.
 - Color downgrade: truecolor → 256 → 16‑color; themes must provide fallbacks.
 - UTF‑8 only; width measured via wcwidth; truncate with ellipsis on overflow.
+
+### Rendering components (`internal/ui`)
+- `graph.go`: braille sparkline renderer (`RenderGraph`) using Unicode braille (U+2800–U+28FF). Each cell encodes a 2×4 dot grid. Supports configurable min/max scale, fill vs line mode, and per-graph lipgloss styling.
+- `meter.go`: percentage bar renderer using Unicode block elements (█░). `RenderMeter` for full bars (label + [bar] + pct) and `RenderMiniMeter` for compact bars without brackets. Both accept `MeterOpts` with fill/empty styles.
+- `layout.go`: height/width splitting, grid column distribution, flow column computation.
+
+### Global interaction (`internal/app/model.go`)
+- Header shows app name, uptime, current update interval, and keybinding hints.
+- `q` / Ctrl+C quits; `1`–`4` toggle CPU/Memory/Network/Process boxes; `+`/`-` adjust update interval; `?`/`h` toggle help overlay.
+- Box visibility tracked in `hiddenBoxes` map; rendering filters to visible plugins before layout.
 
 ## Plugin system
 - `internal/plugin` defines plugin interface, registry, config validation, and shutdown fan‑out.

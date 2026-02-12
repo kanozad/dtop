@@ -11,17 +11,18 @@ import (
 
 	"mld.com/dtop/internal/plugin"
 	"mld.com/dtop/internal/theme"
+	"mld.com/dtop/internal/ui"
 	"mld.com/dtop/pkg/collector"
 	"mld.com/dtop/pkg/types"
 )
 
 type Config struct {
-	ShowSwap      bool
-	ShowDisks     bool
-	ShowIOStat    bool
-	Base10Sizes   bool
-	ZFSARCCached  bool
-	DisksFilter   []string
+	ShowSwap     bool
+	ShowDisks    bool
+	ShowIOStat   bool
+	Base10Sizes  bool
+	ZFSARCCached bool
+	DisksFilter  []string
 }
 
 type Memory struct {
@@ -90,64 +91,63 @@ func (m *Memory) View(data collector.Data, width, height int, th theme.Theme) st
 	m.reflowHistory(&stats, innerWidth)
 	m.mu.Unlock()
 
+	meterOpts := ui.MeterOpts{FillStyle: th.MeterFill, EmptyStyle: th.MeterEmpty}
 	lines := []string{}
 
-	// RAM stats
+	// RAM meter
 	ramUsedPct := 0.0
 	if stats.RAMTotal > 0 {
 		ramUsedPct = float64(stats.RAMUsed) * 100.0 / float64(stats.RAMTotal)
 	}
-	lines = append(lines, th.Text.Render(truncate(
-		fmt.Sprintf("RAM: %s / %s (%.1f%%)",
-			formatBytes(stats.RAMUsed, m.cfg.Base10Sizes),
-			formatBytes(stats.RAMTotal, m.cfg.Base10Sizes),
-			ramUsedPct),
-		innerWidth)))
+	ramLabel := fmt.Sprintf("RAM %s/%s",
+		formatBytes(stats.RAMUsed, m.cfg.Base10Sizes),
+		formatBytes(stats.RAMTotal, m.cfg.Base10Sizes))
+	lines = append(lines, ui.RenderMeter(ramLabel, ramUsedPct, innerWidth, meterOpts))
 
-	// Cached
+	// Memory history graph
+	graphHeight := memGraphRows(height)
+	if graphHeight > 0 && len(stats.MemoryHistory) > 0 {
+		g := ui.RenderGraph(stats.MemoryHistory, innerWidth, graphHeight, ui.GraphOpts{
+			Min: 0, Max: 100, Style: th.GraphMem, Fill: true,
+		})
+		lines = append(lines, g)
+	}
+
+	// Cached + ZFS ARC summary
+	var extras []string
 	if stats.RAMCached > 0 {
-		lines = append(lines, th.Text.Render(truncate(
-			fmt.Sprintf("Cached: %s", formatBytes(stats.RAMCached, m.cfg.Base10Sizes)),
-			innerWidth)))
+		extras = append(extras, fmt.Sprintf("Cached: %s", formatBytes(stats.RAMCached, m.cfg.Base10Sizes)))
 	}
-
-	// ZFS ARC
 	if m.cfg.ZFSARCCached && stats.ZFSARCSize != nil {
-		lines = append(lines, th.Text.Render(truncate(
-			fmt.Sprintf("ZFS ARC: %s", formatBytes(*stats.ZFSARCSize, m.cfg.Base10Sizes)),
-			innerWidth)))
+		extras = append(extras, fmt.Sprintf("ZFS ARC: %s", formatBytes(*stats.ZFSARCSize, m.cfg.Base10Sizes)))
+	}
+	if len(extras) > 0 {
+		lines = append(lines, th.Muted.Render(truncate(strings.Join(extras, "  "), innerWidth)))
 	}
 
-	// Swap stats
+	// Swap meter
 	if m.cfg.ShowSwap && stats.SwapTotal > 0 {
-		swapUsedPct := 0.0
-		if stats.SwapTotal > 0 {
-			swapUsedPct = float64(stats.SwapUsed) * 100.0 / float64(stats.SwapTotal)
-		}
-		lines = append(lines, th.Text.Render(truncate(
-			fmt.Sprintf("Swap: %s / %s (%.1f%%)",
-				formatBytes(stats.SwapUsed, m.cfg.Base10Sizes),
-				formatBytes(stats.SwapTotal, m.cfg.Base10Sizes),
-				swapUsedPct),
-			innerWidth)))
+		swapUsedPct := float64(stats.SwapUsed) * 100.0 / float64(stats.SwapTotal)
+		swapLabel := fmt.Sprintf("Swap %s/%s",
+			formatBytes(stats.SwapUsed, m.cfg.Base10Sizes),
+			formatBytes(stats.SwapTotal, m.cfg.Base10Sizes))
+		lines = append(lines, ui.RenderMeter(swapLabel, swapUsedPct, innerWidth, meterOpts))
 	}
 
-	// Disk stats
+	// Disk stats with capacity bars
 	if m.cfg.ShowDisks && len(stats.Disks) > 0 {
-		lines = append(lines, "") // blank line separator
+		lines = append(lines, strings.Repeat("─", innerWidth))
 		for _, disk := range stats.Disks {
 			usedPct := 0.0
 			if disk.Total > 0 {
 				usedPct = float64(disk.Used) * 100.0 / float64(disk.Total)
 			}
-			diskLine := fmt.Sprintf("%s: %s / %s (%.1f%%)",
-				truncate(disk.MountPoint, 15),
+			diskLabel := fmt.Sprintf("%-12s %s/%s",
+				truncate(disk.MountPoint, 12),
 				formatBytes(disk.Used, m.cfg.Base10Sizes),
-				formatBytes(disk.Total, m.cfg.Base10Sizes),
-				usedPct)
-			lines = append(lines, th.Text.Render(truncate(diskLine, innerWidth)))
+				formatBytes(disk.Total, m.cfg.Base10Sizes))
+			lines = append(lines, ui.RenderMiniMeter(diskLabel, usedPct, innerWidth, meterOpts))
 
-			// I/O stats
 			if m.cfg.ShowIOStat {
 				ioLine := fmt.Sprintf("  R: %s/s  W: %s/s",
 					formatBytes(uint64(disk.ReadBytesPerSec), m.cfg.Base10Sizes),
@@ -159,6 +159,17 @@ func (m *Memory) View(data collector.Data, width, height int, th theme.Theme) st
 
 	body := strings.Join(lines, "\n")
 	return th.RenderBox("Memory", body, width, height)
+}
+
+func memGraphRows(boxHeight int) int {
+	inner := boxHeight - 8
+	if inner < 1 {
+		return 0
+	}
+	if inner > 4 {
+		inner = 4
+	}
+	return inner
 }
 
 func (m *Memory) appendHistory(stats *types.MemoryStats, width int) {

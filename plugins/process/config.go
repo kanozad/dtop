@@ -8,6 +8,8 @@ type Config struct {
 	SortBy       string // Sort field: pid, name, cpu, mem, threads, user
 	FilterString string // Filter processes by name/command
 	MaxDisplay   int    // Maximum number of processes to display
+	FollowPID    int    // Follow a specific PID (0 disables)
+	UseSmaps     bool   // Use /proc/[pid]/smaps for detailed memory
 }
 
 func parseConfig(defaults Config, cfg map[string]any) Config {
@@ -35,6 +37,18 @@ func parseConfig(defaults Config, cfg map[string]any) Config {
 			out.MaxDisplay = int(i)
 		} else if i, ok := v.(int); ok {
 			out.MaxDisplay = i
+		}
+	}
+	if v, ok := cfg["follow_pid"]; ok {
+		if i, ok := v.(int64); ok {
+			out.FollowPID = int(i)
+		} else if i, ok := v.(int); ok {
+			out.FollowPID = i
+		}
+	}
+	if v, ok := cfg["use_smaps"]; ok {
+		if b, ok := v.(bool); ok {
+			out.UseSmaps = b
 		}
 	}
 	return out

@@ -14,7 +14,7 @@ Each section below is optional. Any values omitted fall back to the built-in def
 
 ### Common style fields
 
-Supported in: `[header]`, `[text]`, `[muted]`, `[error]`, `[box_title]`
+Supported in: `[header]`, `[text]`, `[muted]`, `[error]`, `[box_title]`, `[graph_cpu]`, `[graph_mem]`, `[graph_net]`, `[meter_fill]`, `[meter_empty]`, `[highlight]`
 
 - `fg` (string): foreground color (e.g., `"7"`, `"15"`, or a hex value like `"#ffcc00"`).
 - `bg` (string): background color.

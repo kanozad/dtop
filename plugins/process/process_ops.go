@@ -129,3 +129,103 @@ func traverseTree(pid int, depth int, prefix string, procMap map[int]*types.Proc
 		traverseTree(childPID, depth+1, childPrefix, procMap, children, result, childIsLast)
 	}
 }
+
+func filterFollow(processes []types.ProcessInfo, pid int, includeTree bool) []types.ProcessInfo {
+	if pid <= 0 {
+		return processes
+	}
+	if !includeTree {
+		for _, proc := range processes {
+			if proc.PID == pid {
+				return []types.ProcessInfo{proc}
+			}
+		}
+		return nil
+	}
+
+	children := make(map[int][]int)
+	for _, proc := range processes {
+		children[proc.PPID] = append(children[proc.PPID], proc.PID)
+	}
+
+	allowed := make(map[int]struct{})
+	queue := []int{pid}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		if _, ok := allowed[cur]; ok {
+			continue
+		}
+		allowed[cur] = struct{}{}
+		queue = append(queue, children[cur]...)
+	}
+
+	var filtered []types.ProcessInfo
+	for _, proc := range processes {
+		if _, ok := allowed[proc.PID]; ok {
+			filtered = append(filtered, proc)
+		}
+	}
+	return filtered
+}
+
+func applyTreeCollapse(processes []types.ProcessInfo, collapsed map[int]struct{}) []types.ProcessInfo {
+	if len(collapsed) == 0 {
+		return processes
+	}
+	result := make([]types.ProcessInfo, 0, len(processes))
+	skipDepth := -1
+	for _, proc := range processes {
+		if skipDepth >= 0 {
+			if proc.TreeDepth > skipDepth {
+				continue
+			}
+			skipDepth = -1
+		}
+		if _, ok := collapsed[proc.PID]; ok {
+			proc.TreeCollapsed = true
+			result = append(result, proc)
+			skipDepth = proc.TreeDepth
+			continue
+		}
+		proc.TreeCollapsed = false
+		result = append(result, proc)
+	}
+	return result
+}
+
+func pruneCollapsed(processes []types.ProcessInfo, collapsed map[int]struct{}) map[int]struct{} {
+	if len(collapsed) == 0 {
+		return collapsed
+	}
+	present := make(map[int]struct{}, len(processes))
+	for _, proc := range processes {
+		present[proc.PID] = struct{}{}
+	}
+	pruned := make(map[int]struct{})
+	for pid := range collapsed {
+		if _, ok := present[pid]; ok {
+			pruned[pid] = struct{}{}
+		}
+	}
+	return pruned
+}
+
+func indexByPID(processes []types.ProcessInfo, pid int) int {
+	if pid == 0 {
+		return -1
+	}
+	for i, proc := range processes {
+		if proc.PID == pid {
+			return i
+		}
+	}
+	return -1
+}
+
+func hasChildren(processes []types.ProcessInfo, idx int) bool {
+	if idx < 0 || idx+1 >= len(processes) {
+		return false
+	}
+	return processes[idx+1].TreeDepth > processes[idx].TreeDepth
+}

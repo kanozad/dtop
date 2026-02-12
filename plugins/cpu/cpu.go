@@ -7,10 +7,12 @@ import (
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
 	"mld.com/dtop/internal/plugin"
 	"mld.com/dtop/internal/theme"
+	"mld.com/dtop/internal/ui"
 	"mld.com/dtop/pkg/collector"
 	"mld.com/dtop/pkg/types"
 )
@@ -82,21 +84,76 @@ func (c *CPU) View(data collector.Data, width, height int, th theme.Theme) strin
 	c.reflowHistory(&stats, innerWidth)
 	c.mu.Unlock()
 
+	meterOpts := ui.MeterOpts{FillStyle: th.MeterFill, EmptyStyle: th.MeterEmpty}
 	lines := []string{
-		th.Text.Render(truncate(fmt.Sprintf("Total: %.1f%%", stats.Total), innerWidth)),
-		th.Text.Render(truncate(fmt.Sprintf("Load: %.2f %.2f %.2f", stats.Load1, stats.Load5, stats.Load15), innerWidth)),
+		ui.RenderMeter("CPU", stats.Total, innerWidth, meterOpts),
 	}
+
+	// Braille graph of total CPU history.
+	graphHeight := graphRows(height)
+	if graphHeight > 0 && len(stats.TotalHistory) > 0 {
+		g := ui.RenderGraph(stats.TotalHistory, innerWidth, graphHeight, ui.GraphOpts{
+			Min: 0, Max: 100, Style: th.GraphCPU, Fill: true,
+		})
+		lines = append(lines, g)
+	}
+
+	// Summary line: load averages + optional temp.
+	summary := fmt.Sprintf("Load: %.2f %.2f %.2f", stats.Load1, stats.Load5, stats.Load15)
 	if c.cfg.ShowTemp && stats.TemperatureC != nil {
-		lines = append(lines, th.Text.Render(truncate(fmt.Sprintf("Temp: %.1f°C", *stats.TemperatureC), innerWidth)))
+		summary += fmt.Sprintf("  Temp: %.1f°C", *stats.TemperatureC)
 	}
+	lines = append(lines, th.Muted.Render(truncate(summary, innerWidth)))
+
+	// Per-core mini meters.
 	if c.cfg.PerCore && len(stats.PerCore) > 0 {
-		for i, v := range stats.PerCore {
-			lines = append(lines, th.Text.Render(truncate(fmt.Sprintf("cpu%d: %5.1f%%", i, v), innerWidth)))
-		}
+		coreLines := renderCoreBars(stats.PerCore, innerWidth, meterOpts)
+		lines = append(lines, coreLines...)
 	}
 
 	body := strings.Join(lines, "\n")
 	return th.RenderBox("CPU", body, width, height)
+}
+
+// graphRows computes how many braille rows to allocate for the graph based on
+// the total box inner height. Returns 0 if there's not enough room.
+func graphRows(boxHeight int) int {
+	// Reserve: title+border (2) + meter (1) + summary (1) + padding (2) = ~6 lines overhead.
+	inner := boxHeight - 6
+	if inner < 1 {
+		return 0
+	}
+	// Cap graph at 6 rows (24 dots of vertical resolution).
+	if inner > 6 {
+		inner = 6
+	}
+	return inner
+}
+
+// renderCoreBars renders per-core mini meters, using 2 columns if there are
+// more than 4 cores.
+func renderCoreBars(perCore []float64, width int, opts ui.MeterOpts) []string {
+	if len(perCore) <= 4 {
+		lines := make([]string, len(perCore))
+		for i, v := range perCore {
+			label := fmt.Sprintf("cpu%-2d", i)
+			lines[i] = ui.RenderMiniMeter(label, v, width, opts)
+		}
+		return lines
+	}
+	// Two-column layout.
+	colWidth := width / 2
+	var lines []string
+	for i := 0; i < len(perCore); i += 2 {
+		left := ui.RenderMiniMeter(fmt.Sprintf("cpu%-2d", i), perCore[i], colWidth, opts)
+		if i+1 < len(perCore) {
+			right := ui.RenderMiniMeter(fmt.Sprintf("cpu%-2d", i+1), perCore[i+1], colWidth, opts)
+			lines = append(lines, lipgloss.JoinHorizontal(lipgloss.Top, left, right))
+		} else {
+			lines = append(lines, left)
+		}
+	}
+	return lines
 }
 
 func (c *CPU) appendHistory(stats *types.CPUStats, width int) {

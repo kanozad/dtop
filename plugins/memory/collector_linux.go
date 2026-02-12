@@ -215,28 +215,28 @@ func parseMounts() ([]mountInfo, error) {
 // isPhysicalFilesystem returns true if the filesystem type is a physical disk.
 func isPhysicalFilesystem(fsType string) bool {
 	virtual := map[string]bool{
-		"proc":       true,
-		"sysfs":      true,
-		"devpts":     true,
-		"tmpfs":      true,
-		"devtmpfs":   true,
-		"cgroup":     true,
-		"cgroup2":    true,
-		"pstore":     true,
-		"bpf":        true,
-		"tracefs":    true,
-		"debugfs":    true,
-		"securityfs": true,
-		"hugetlbfs":  true,
-		"mqueue":     true,
-		"autofs":     true,
-		"autofs4":    true,
-		"configfs":   true,
-		"fusectl":    true,
-		"fuse":       true,
+		"proc":            true,
+		"sysfs":           true,
+		"devpts":          true,
+		"tmpfs":           true,
+		"devtmpfs":        true,
+		"cgroup":          true,
+		"cgroup2":         true,
+		"pstore":          true,
+		"bpf":             true,
+		"tracefs":         true,
+		"debugfs":         true,
+		"securityfs":      true,
+		"hugetlbfs":       true,
+		"mqueue":          true,
+		"autofs":          true,
+		"autofs4":         true,
+		"configfs":        true,
+		"fusectl":         true,
+		"fuse":            true,
 		"fuse.gvfsd-fuse": true,
-		"overlay":    true,
-		"squashfs":   true,
+		"overlay":         true,
+		"squashfs":        true,
 	}
 	return !virtual[fsType]
 }
@@ -260,7 +260,7 @@ func parseDiskstats() (map[string]diskIOCounters, error) {
 		}
 
 		device := fields[2]
-		
+
 		// Read sectors (field 5, 0-indexed: field 6 in 1-indexed)
 		readSectors, err1 := strconv.ParseUint(fields[5], 10, 64)
 		// Write sectors (field 9, 0-indexed: field 10 in 1-indexed)

@@ -38,9 +38,18 @@ type PluginsConfig struct {
 	Config  map[string]map[string]any `toml:"config"`
 }
 
+// LayoutConfig controls how plugin boxes are arranged on screen.
+type LayoutConfig struct {
+	// Mode is the layout mode: "vertical" (single column) or "grid" (two columns).
+	Mode string `toml:"mode"`
+	// Columns is the number of columns in grid mode (default 2).
+	Columns int `toml:"columns"`
+}
+
 type Config struct {
 	UpdateInterval Duration      `toml:"update_interval"`
 	Theme          ThemeConfig   `toml:"theme"`
+	Layout         LayoutConfig  `toml:"layout"`
 	Plugins        PluginsConfig `toml:"plugins"`
 }
 
@@ -49,6 +58,10 @@ func Default() Config {
 		UpdateInterval: Duration{Duration: 2 * time.Second},
 		Theme: ThemeConfig{
 			Name: "default",
+		},
+		Layout: LayoutConfig{
+			Mode:    "grid",
+			Columns: 2,
 		},
 		Plugins: PluginsConfig{
 			Enabled: []string{"clock", "cpu"},
@@ -117,6 +130,19 @@ func Load(path string) (Config, error) {
 
 	if cfg.UpdateInterval.Duration <= 0 {
 		cfg.UpdateInterval = Default().UpdateInterval
+	}
+
+	// Normalize layout config.
+	switch cfg.Layout.Mode {
+	case "vertical", "grid", "flow":
+		// valid
+	case "":
+		cfg.Layout.Mode = Default().Layout.Mode
+	default:
+		cfg.Layout.Mode = Default().Layout.Mode
+	}
+	if cfg.Layout.Columns < 1 {
+		cfg.Layout.Columns = Default().Layout.Columns
 	}
 
 	return cfg, nil

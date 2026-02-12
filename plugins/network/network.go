@@ -11,6 +11,7 @@ import (
 
 	"mld.com/dtop/internal/plugin"
 	"mld.com/dtop/internal/theme"
+	"mld.com/dtop/internal/ui"
 	"mld.com/dtop/pkg/collector"
 	"mld.com/dtop/pkg/types"
 )
@@ -90,27 +91,76 @@ func (n *Network) View(data collector.Data, width, height int, th theme.Theme) s
 		link = "up"
 	}
 	lines := []string{
-		th.Text.Render(truncate(fmt.Sprintf("Interface: %s (%s)", stats.Interface, link), innerWidth)),
-	}
-	if len(stats.IPv4) > 0 {
-		lines = append(lines, th.Text.Render(truncate("IPv4: "+strings.Join(stats.IPv4, ", "), innerWidth)))
-	}
-	if n.cfg.ShowIPv6 && len(stats.IPv6) > 0 {
-		lines = append(lines, th.Text.Render(truncate("IPv6: "+strings.Join(stats.IPv6, ", "), innerWidth)))
+		th.Text.Render(truncate(fmt.Sprintf("%s (%s)", stats.Interface, link), innerWidth)),
 	}
 
 	rxScale := autoScale(stats.RxHistory, minAutoScale)
 	txScale := autoScale(stats.TxHistory, minAutoScale)
 
-	lines = append(lines,
-		th.Text.Render(truncate(fmt.Sprintf("Down: %s (peak %s)", formatRate(stats.RxBytesPerSec), formatRate(stats.PeakRxBytesPerSec)), innerWidth)),
-		th.Text.Render(truncate(fmt.Sprintf("Up:   %s (peak %s)", formatRate(stats.TxBytesPerSec), formatRate(stats.PeakTxBytesPerSec)), innerWidth)),
-		th.Muted.Render(truncate(fmt.Sprintf("Scale: %s / %s", formatRate(rxScale), formatRate(txScale)), innerWidth)),
-		th.Text.Render(truncate(fmt.Sprintf("Total: %s / %s", formatBytes(float64(stats.RxBytes), false), formatBytes(float64(stats.TxBytes), false)), innerWidth)),
-	)
+	// Download graph
+	graphH := netGraphRows(height)
+	if graphH > 0 && len(stats.RxHistory) > 0 {
+		lines = append(lines,
+			th.Text.Render(truncate(fmt.Sprintf("▼ Down: %s (peak %s, scale %s)",
+				formatRate(stats.RxBytesPerSec), formatRate(stats.PeakRxBytesPerSec), formatRate(rxScale)), innerWidth)),
+		)
+		g := ui.RenderGraph(stats.RxHistory, innerWidth, graphH, ui.GraphOpts{
+			Min: 0, Max: rxScale, Style: th.GraphNet, Fill: true,
+		})
+		lines = append(lines, g)
+	} else {
+		lines = append(lines,
+			th.Text.Render(truncate(fmt.Sprintf("▼ Down: %s (peak %s)",
+				formatRate(stats.RxBytesPerSec), formatRate(stats.PeakRxBytesPerSec)), innerWidth)),
+		)
+	}
+
+	// Upload graph
+	if graphH > 0 && len(stats.TxHistory) > 0 {
+		lines = append(lines,
+			th.Text.Render(truncate(fmt.Sprintf("▲ Up:   %s (peak %s, scale %s)",
+				formatRate(stats.TxBytesPerSec), formatRate(stats.PeakTxBytesPerSec), formatRate(txScale)), innerWidth)),
+		)
+		g := ui.RenderGraph(stats.TxHistory, innerWidth, graphH, ui.GraphOpts{
+			Min: 0, Max: txScale, Style: th.GraphNet, Fill: true,
+		})
+		lines = append(lines, g)
+	} else {
+		lines = append(lines,
+			th.Text.Render(truncate(fmt.Sprintf("▲ Up:   %s (peak %s)",
+				formatRate(stats.TxBytesPerSec), formatRate(stats.PeakTxBytesPerSec)), innerWidth)),
+		)
+	}
+
+	// Footer: IPs + totals
+	var footer []string
+	if len(stats.IPv4) > 0 {
+		footer = append(footer, "IPv4: "+strings.Join(stats.IPv4, ", "))
+	}
+	if n.cfg.ShowIPv6 && len(stats.IPv6) > 0 {
+		footer = append(footer, "IPv6: "+strings.Join(stats.IPv6, ", "))
+	}
+	footer = append(footer, fmt.Sprintf("Total: ▼%s ▲%s",
+		formatBytes(float64(stats.RxBytes), false),
+		formatBytes(float64(stats.TxBytes), false)))
+	for _, f := range footer {
+		lines = append(lines, th.Muted.Render(truncate(f, innerWidth)))
+	}
 
 	body := strings.Join(lines, "\n")
 	return th.RenderBox("Network", body, width, height)
+}
+
+func netGraphRows(boxHeight int) int {
+	// Two graphs + labels + footer need space. Reserve ~10 lines overhead.
+	inner := (boxHeight - 10) / 2
+	if inner < 1 {
+		return 0
+	}
+	if inner > 4 {
+		inner = 4
+	}
+	return inner
 }
 
 func (n *Network) appendHistory(stats *types.NetworkStats, width int) {

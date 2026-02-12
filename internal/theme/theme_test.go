@@ -37,6 +37,20 @@ func TestFromNameUnknown(t *testing.T) {
 	}
 }
 
+func TestBoxChromeDefault(t *testing.T) {
+	t.Parallel()
+
+	th := Default()
+	v, h := th.BoxChrome()
+	// Default: RoundedBorder (1 top + 1 bottom) + Padding(0,1) = 2 vertical, 4 horizontal.
+	if v != 2 {
+		t.Fatalf("vertical chrome: got %d want 2", v)
+	}
+	if h != 4 {
+		t.Fatalf("horizontal chrome: got %d want 4", h)
+	}
+}
+
 func TestFromNameLoadsFile(t *testing.T) {
 
 	dir := t.TempDir()
