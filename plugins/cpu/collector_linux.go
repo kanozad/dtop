@@ -5,6 +5,7 @@ package cpu
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,13 +16,14 @@ import (
 	"mld.com/dtop/pkg/types"
 )
 
-func readCPUStats(prev map[string]cpuTimes, showTemp bool) (types.CPUStats, map[string]cpuTimes, error) {
+func readCPUStats(prev map[string]cpuTimes, opts collectOpts) (types.CPUStats, map[string]cpuTimes, raplState, error) {
 	samples, err := readCPUSamples("/proc/stat")
 	if err != nil {
-		return types.CPUStats{}, prev, err
+		return types.CPUStats{}, prev, raplState{}, err
 	}
 
-	stats := types.CPUStats{Timestamp: time.Now()}
+	now := time.Now()
+	stats := types.CPUStats{Timestamp: now}
 	if total, ok := samples["cpu"]; ok {
 		stats.Total = usagePercent(prev, "cpu", total)
 	}
@@ -35,11 +37,42 @@ func readCPUStats(prev map[string]cpuTimes, showTemp bool) (types.CPUStats, map[
 		stats.Load15 = load15
 	}
 
-	if showTemp {
+	if opts.showTemp {
 		stats.TemperatureC = readTemperature("/sys/class/thermal")
 	}
 
-	return stats, samples, nil
+	if opts.showFreq {
+		stats.FrequencyMHz = readCoreFrequencies(stats.Cores)
+		if len(stats.FrequencyMHz) > 0 {
+			var sum float64
+			for _, f := range stats.FrequencyMHz {
+				sum += f
+			}
+			stats.FrequencyAvgMHz = sum / float64(len(stats.FrequencyMHz))
+		}
+	}
+
+	var rs raplState
+	if opts.showWatts {
+		rs = readRAPLEnergy()
+		if rs.energy > 0 && opts.prevRAPLEnergy > 0 && !opts.prevRAPLTime.IsZero() {
+			deltaEnergy := rs.energy - opts.prevRAPLEnergy
+			// Handle counter wrap-around (32-bit or implementation-specific).
+			if rs.energy < opts.prevRAPLEnergy {
+				deltaEnergy = rs.energy // skip this sample on wrap
+			} else {
+				deltaTime := now.Sub(opts.prevRAPLTime).Seconds()
+				if deltaTime > 0 {
+					watts := float64(deltaEnergy) / 1_000_000.0 / deltaTime
+					stats.PowerWatts = &watts
+				}
+			}
+		}
+	}
+
+	stats.ContainerType, stats.EffectiveCPUs = detectContainer()
+
+	return stats, samples, rs, nil
 }
 
 func usagePercent(prev map[string]cpuTimes, key string, cur cpuTimes) float64 {
@@ -181,4 +214,132 @@ func readTemperature(base string) *float64 {
 		return &value
 	}
 	return nil
+}
+
+// readCoreFrequencies reads per-core current frequency from cpufreq sysfs.
+// Returns MHz for each core, or nil if cpufreq is unavailable.
+func readCoreFrequencies(coreCount int) []float64 {
+	if coreCount <= 0 {
+		return nil
+	}
+	freqs := make([]float64, 0, coreCount)
+	for i := 0; i < coreCount; i++ {
+		path := fmt.Sprintf("/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq", i)
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil // cpufreq not available
+		}
+		khz, err := strconv.ParseFloat(strings.TrimSpace(string(b)), 64)
+		if err != nil {
+			return nil
+		}
+		freqs = append(freqs, khz/1000.0)
+	}
+	return freqs
+}
+
+// readRAPLEnergy reads the package-level RAPL energy counter (microjoules).
+// Returns zero-value raplState if RAPL is not available.
+func readRAPLEnergy() raplState {
+	// Try Intel RAPL first, then AMD equivalent.
+	for _, path := range []string{
+		"/sys/class/powercap/intel-rapl:0/energy_uj",
+		"/sys/class/powercap/amd-rapl:0/energy_uj",
+	} {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		v, err := strconv.ParseUint(strings.TrimSpace(string(b)), 10, 64)
+		if err != nil {
+			continue
+		}
+		return raplState{energy: v, timestamp: time.Now()}
+	}
+	return raplState{}
+}
+
+// detectContainer checks whether we're running inside a container and, if so,
+// reads the cgroup CPU quota to determine effective CPUs.
+func detectContainer() (string, int) {
+	ctype := detectContainerType()
+	if ctype == "" {
+		return "", 0
+	}
+	effective := readCgroupCPUQuota()
+	return ctype, effective
+}
+
+func detectContainerType() string {
+	// Check /.dockerenv (Docker creates this file).
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return "docker"
+	}
+
+	// Check /proc/1/cgroup for container runtime signatures.
+	b, err := os.ReadFile("/proc/1/cgroup")
+	if err != nil {
+		return ""
+	}
+	content := strings.ToLower(string(b))
+	if strings.Contains(content, "docker") || strings.Contains(content, "containerd") {
+		return "docker"
+	}
+	if strings.Contains(content, "lxc") {
+		return "lxc"
+	}
+
+	// Check /proc/self/mountinfo for overlay filesystem (common in containers).
+	mi, err := os.ReadFile("/proc/self/mountinfo")
+	if err != nil {
+		return ""
+	}
+	miContent := strings.ToLower(string(mi))
+	if strings.Contains(miContent, "overlay") && strings.Contains(miContent, "/docker/") {
+		return "docker"
+	}
+
+	return ""
+}
+
+// readCgroupCPUQuota reads the effective CPU count from cgroup v2 cpu.max or
+// cgroup v1 cpu.cfs_quota_us/cpu.cfs_period_us. Returns 0 if no quota is set.
+func readCgroupCPUQuota() int {
+	// cgroup v2: /sys/fs/cgroup/cpu.max contains "<quota> <period>" or "max <period>".
+	if b, err := os.ReadFile("/sys/fs/cgroup/cpu.max"); err == nil {
+		fields := strings.Fields(strings.TrimSpace(string(b)))
+		if len(fields) == 2 && fields[0] != "max" {
+			quota, err1 := strconv.ParseFloat(fields[0], 64)
+			period, err2 := strconv.ParseFloat(fields[1], 64)
+			if err1 == nil && err2 == nil && period > 0 {
+				cpus := int(quota / period)
+				if cpus > 0 {
+					return cpus
+				}
+			}
+		}
+	}
+
+	// cgroup v1: separate files for quota and period.
+	quotaB, err := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_quota_us")
+	if err != nil {
+		return 0
+	}
+	periodB, err := os.ReadFile("/sys/fs/cgroup/cpu/cpu.cfs_period_us")
+	if err != nil {
+		return 0
+	}
+	quota, err := strconv.ParseFloat(strings.TrimSpace(string(quotaB)), 64)
+	if err != nil || quota <= 0 {
+		return 0 // -1 means no limit
+	}
+	period, err := strconv.ParseFloat(strings.TrimSpace(string(periodB)), 64)
+	if err != nil || period <= 0 {
+		return 0
+	}
+	cpus := int(quota / period)
+	if cpus > 0 {
+		return cpus
+	}
+	return 0
 }

@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/mattn/go-runewidth"
 
 	"mld.com/dtop/internal/plugin"
 	"mld.com/dtop/internal/theme"
@@ -23,8 +22,6 @@ type Network struct {
 	mu   sync.Mutex
 	prev map[string]netDevCounters
 
-	rxHistory []float64
-	txHistory []float64
 	lastWidth int
 	peakRx    float64
 	peakTx    float64
@@ -41,6 +38,9 @@ func New() *Network {
 
 func (n *Network) ID() plugin.ID { return "network" }
 func (n *Network) Name() string  { return "Network" }
+func (n *Network) SizeHint() ui.SizeHint {
+	return ui.SizeHint{MinH: 3, PrefH: 8, MaxH: 0, Weight: 2}
+}
 func (n *Network) AllowedConfigKeys() []string {
 	return []string{"interface", "show_ipv6"}
 }
@@ -60,9 +60,6 @@ func (n *Network) Collect(context.Context) (collector.Data, error) {
 	}
 	n.prev = nextPrev
 
-	targetWidth := n.targetWidth()
-	n.appendHistory(&stats, targetWidth)
-
 	n.peakRx = maxFloat(n.peakRx, stats.RxBytesPerSec)
 	n.peakTx = maxFloat(n.peakTx, stats.TxBytesPerSec)
 	stats.PeakRxBytesPerSec = n.peakRx
@@ -80,59 +77,94 @@ func (n *Network) View(data collector.Data, width, height int, th theme.Theme) s
 	if !ok {
 		return th.RenderBox("Network", th.Muted.Render("Collecting..."), width, height)
 	}
-	innerWidth := contentWidth(width)
+	innerWidth := ui.ContentWidth(width)
 	n.mu.Lock()
 	n.lastWidth = innerWidth
-	n.reflowHistory(&stats, innerWidth)
 	n.mu.Unlock()
 
+	lines := []string{
+		n.renderHeader(&stats, innerWidth, th),
+	}
+
+	graphH := netGraphRows(height)
+
+	// Download section
+	lines = append(lines, n.renderDownloadSection(&stats, innerWidth, graphH, th)...)
+
+	// Upload section
+	lines = append(lines, n.renderUploadSection(&stats, innerWidth, graphH, th)...)
+
+	// Footer: IPs + totals
+	lines = append(lines, n.renderFooter(&stats, innerWidth, th)...)
+
+	body := strings.Join(lines, "\n")
+	return th.RenderBox("Network", body, width, height)
+}
+
+func (n *Network) renderHeader(stats *types.NetworkStats, width int, th theme.Theme) string {
 	link := "down"
 	if stats.LinkUp {
 		link = "up"
 	}
-	lines := []string{
-		th.Text.Render(truncate(fmt.Sprintf("%s (%s)", stats.Interface, link), innerWidth)),
-	}
+	return th.Text.Render(ui.Truncate(fmt.Sprintf("%s (%s)", stats.Interface, link), width))
+}
 
+func (n *Network) renderDownloadSection(stats *types.NetworkStats, width, height int, th theme.Theme) []string {
+	var lines []string
 	rxScale := autoScale(stats.RxHistory, minAutoScale)
+	downPrefix := "▼ Down"
+	if !th.UTF8 {
+		downPrefix = "Down"
+	}
+
+	header := th.Text.Render(ui.Truncate(fmt.Sprintf("%s: %s (peak %s, scale %s)", downPrefix,
+		formatRate(stats.RxBytesPerSec), formatRate(stats.PeakRxBytesPerSec), formatRate(rxScale)), width))
+
+	if height > 0 && len(stats.RxHistory) > 0 {
+		lines = append(lines, header)
+		g := ui.RenderGraph(stats.RxHistory, width, height, ui.GraphOpts{
+			Min: 0, Max: rxScale, Style: th.GraphNet, Fill: true, ASCII: !th.UTF8,
+		})
+		lines = append(lines, g)
+	} else {
+		// Fallback header without scale if no graph
+		lines = append(lines,
+			th.Text.Render(ui.Truncate(fmt.Sprintf("%s: %s (peak %s)", downPrefix,
+				formatRate(stats.RxBytesPerSec), formatRate(stats.PeakRxBytesPerSec)), width)),
+		)
+	}
+	return lines
+}
+
+func (n *Network) renderUploadSection(stats *types.NetworkStats, width, height int, th theme.Theme) []string {
+	var lines []string
 	txScale := autoScale(stats.TxHistory, minAutoScale)
+	upPrefix := "▲ Up"
+	if !th.UTF8 {
+		upPrefix = "Up"
+	}
 
-	// Download graph
-	graphH := netGraphRows(height)
-	if graphH > 0 && len(stats.RxHistory) > 0 {
-		lines = append(lines,
-			th.Text.Render(truncate(fmt.Sprintf("▼ Down: %s (peak %s, scale %s)",
-				formatRate(stats.RxBytesPerSec), formatRate(stats.PeakRxBytesPerSec), formatRate(rxScale)), innerWidth)),
-		)
-		g := ui.RenderGraph(stats.RxHistory, innerWidth, graphH, ui.GraphOpts{
-			Min: 0, Max: rxScale, Style: th.GraphNet, Fill: true,
+	header := th.Text.Render(ui.Truncate(fmt.Sprintf("%s: %s (peak %s, scale %s)", upPrefix,
+		formatRate(stats.TxBytesPerSec), formatRate(stats.PeakTxBytesPerSec), formatRate(txScale)), width))
+
+	if height > 0 && len(stats.TxHistory) > 0 {
+		lines = append(lines, header)
+		g := ui.RenderGraph(stats.TxHistory, width, height, ui.GraphOpts{
+			Min: 0, Max: txScale, Style: th.GraphNet, Fill: true, ASCII: !th.UTF8,
 		})
 		lines = append(lines, g)
 	} else {
+		// Fallback header without scale if no graph
 		lines = append(lines,
-			th.Text.Render(truncate(fmt.Sprintf("▼ Down: %s (peak %s)",
-				formatRate(stats.RxBytesPerSec), formatRate(stats.PeakRxBytesPerSec)), innerWidth)),
+			th.Text.Render(ui.Truncate(fmt.Sprintf("%s: %s (peak %s)", upPrefix,
+				formatRate(stats.TxBytesPerSec), formatRate(stats.PeakTxBytesPerSec)), width)),
 		)
 	}
+	return lines
+}
 
-	// Upload graph
-	if graphH > 0 && len(stats.TxHistory) > 0 {
-		lines = append(lines,
-			th.Text.Render(truncate(fmt.Sprintf("▲ Up:   %s (peak %s, scale %s)",
-				formatRate(stats.TxBytesPerSec), formatRate(stats.PeakTxBytesPerSec), formatRate(txScale)), innerWidth)),
-		)
-		g := ui.RenderGraph(stats.TxHistory, innerWidth, graphH, ui.GraphOpts{
-			Min: 0, Max: txScale, Style: th.GraphNet, Fill: true,
-		})
-		lines = append(lines, g)
-	} else {
-		lines = append(lines,
-			th.Text.Render(truncate(fmt.Sprintf("▲ Up:   %s (peak %s)",
-				formatRate(stats.TxBytesPerSec), formatRate(stats.PeakTxBytesPerSec)), innerWidth)),
-		)
-	}
-
-	// Footer: IPs + totals
+func (n *Network) renderFooter(stats *types.NetworkStats, width int, th theme.Theme) []string {
+	var lines []string
 	var footer []string
 	if len(stats.IPv4) > 0 {
 		footer = append(footer, "IPv4: "+strings.Join(stats.IPv4, ", "))
@@ -140,15 +172,22 @@ func (n *Network) View(data collector.Data, width, height int, th theme.Theme) s
 	if n.cfg.ShowIPv6 && len(stats.IPv6) > 0 {
 		footer = append(footer, "IPv6: "+strings.Join(stats.IPv6, ", "))
 	}
-	footer = append(footer, fmt.Sprintf("Total: ▼%s ▲%s",
-		formatBytes(float64(stats.RxBytes), false),
-		formatBytes(float64(stats.TxBytes), false)))
-	for _, f := range footer {
-		lines = append(lines, th.Muted.Render(truncate(f, innerWidth)))
+	totalDownPrefix := "▼"
+	totalUpPrefix := "▲"
+	if !th.UTF8 {
+		totalDownPrefix = "D"
+		totalUpPrefix = "U"
 	}
+	footer = append(footer, fmt.Sprintf("Total: %s%s %s%s",
+		totalDownPrefix,
+		formatBytes(float64(stats.RxBytes), false),
+		totalUpPrefix,
+		formatBytes(float64(stats.TxBytes), false)))
 
-	body := strings.Join(lines, "\n")
-	return th.RenderBox("Network", body, width, height)
+	for _, f := range footer {
+		lines = append(lines, th.Muted.Render(ui.Truncate(f, width)))
+	}
+	return lines
 }
 
 func netGraphRows(boxHeight int) int {
@@ -163,21 +202,19 @@ func netGraphRows(boxHeight int) int {
 	return inner
 }
 
-func (n *Network) appendHistory(stats *types.NetworkStats, width int) {
-	n.rxHistory = pushAndClamp(n.rxHistory, stats.RxBytesPerSec, width)
-	n.txHistory = pushAndClamp(n.txHistory, stats.TxBytesPerSec, width)
-	stats.RxHistory = n.rxHistory
-	stats.TxHistory = n.txHistory
-}
-
-func (n *Network) reflowHistory(stats *types.NetworkStats, width int) {
-	if width <= 0 {
-		return
+func (n *Network) UpdateHistory(h *types.HistoryStore, data collector.Data, width int) collector.Data {
+	stats, ok := data.(types.NetworkStats)
+	if !ok {
+		return data
 	}
-	n.rxHistory = resizeHistory(n.rxHistory, width)
-	n.txHistory = resizeHistory(n.txHistory, width)
-	stats.RxHistory = n.rxHistory
-	stats.TxHistory = n.txHistory
+
+	h.Push("net.rx", stats.RxBytesPerSec, width)
+	stats.RxHistory = h.Get("net.rx")
+
+	h.Push("net.tx", stats.TxBytesPerSec, width)
+	stats.TxHistory = h.Get("net.tx")
+
+	return stats
 }
 
 func (n *Network) targetWidth() int {
@@ -195,36 +232,6 @@ func autoScale(hist []float64, floor float64) float64 {
 		}
 	}
 	return maxVal
-}
-
-func pushAndClamp(hist []float64, value float64, width int) []float64 {
-	if width <= 0 {
-		return hist
-	}
-	hist = append(hist, value)
-	if len(hist) > width {
-		hist = hist[len(hist)-width:]
-	}
-	return hist
-}
-
-func resizeHistory(hist []float64, width int) []float64 {
-	if width <= 0 {
-		return hist
-	}
-	if len(hist) > width {
-		hist = hist[len(hist)-width:]
-	}
-	if len(hist) < width {
-		padVal := 0.0
-		if len(hist) > 0 {
-			padVal = hist[len(hist)-1]
-		}
-		for len(hist) < width {
-			hist = append(hist, padVal)
-		}
-	}
-	return hist
 }
 
 func formatRate(bytesPerSec float64) string {
@@ -250,21 +257,6 @@ func formatBytes(value float64, base10 bool) string {
 		return fmt.Sprintf("%.0f %s", value, suffixes[idx])
 	}
 	return fmt.Sprintf("%.1f %s", value, suffixes[idx])
-}
-
-func contentWidth(totalWidth int) int {
-	w := totalWidth - 4
-	if w < 1 {
-		return 1
-	}
-	return w
-}
-
-func truncate(s string, width int) string {
-	if width <= 0 {
-		return s
-	}
-	return runewidth.Truncate(s, width, "…")
 }
 
 func maxFloat(a, b float64) float64 {

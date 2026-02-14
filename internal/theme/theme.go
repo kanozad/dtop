@@ -10,6 +10,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/pelletier/go-toml/v2"
+
+	"mld.com/dtop/internal/termcap"
 )
 
 var themeNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
@@ -17,6 +19,10 @@ var themeNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 type styleConfig struct {
 	Fg        string `toml:"fg"`
 	Bg        string `toml:"bg"`
+	Fg256     string `toml:"fg_256"`
+	Bg256     string `toml:"bg_256"`
+	Fg16      string `toml:"fg_16"`
+	Bg16      string `toml:"bg_16"`
 	Bold      *bool  `toml:"bold"`
 	Italic    *bool  `toml:"italic"`
 	Underline *bool  `toml:"underline"`
@@ -64,6 +70,12 @@ type Theme struct {
 	MeterFill  lipgloss.Style
 	MeterEmpty lipgloss.Style
 	Highlight  lipgloss.Style
+	UTF8       bool
+	ColorLevel termcap.ColorLevel
+
+	// rawCfg is retained so WithCapabilities can re-apply styles with
+	// color-level-appropriate fallback colors.
+	rawCfg *themeConfig
 }
 
 func Default() Theme {
@@ -84,6 +96,7 @@ func Default() Theme {
 		MeterFill:  lipgloss.NewStyle().Foreground(lipgloss.Color("#5fafff")),
 		MeterEmpty: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 		Highlight:  lipgloss.NewStyle().Bold(true).Reverse(true),
+		UTF8:       true,
 	}
 }
 
@@ -113,19 +126,42 @@ func FromName(name string) (Theme, error) {
 	}
 
 	th := Default()
-	applyStyle(&th.Header, cfg.Header)
-	applyStyle(&th.Text, cfg.Text)
-	applyStyle(&th.Muted, cfg.Muted)
-	applyStyle(&th.Error, cfg.Error)
+	th.rawCfg = &cfg
+	applyStyle(&th.Header, cfg.Header, termcap.ColorTrueColor)
+	applyStyle(&th.Text, cfg.Text, termcap.ColorTrueColor)
+	applyStyle(&th.Muted, cfg.Muted, termcap.ColorTrueColor)
+	applyStyle(&th.Error, cfg.Error, termcap.ColorTrueColor)
 	applyBox(&th.Box, cfg.Box)
-	applyStyle(&th.BoxTitle, cfg.BoxTitle)
-	applyStyle(&th.GraphCPU, cfg.GraphCPU)
-	applyStyle(&th.GraphMem, cfg.GraphMem)
-	applyStyle(&th.GraphNet, cfg.GraphNet)
-	applyStyle(&th.MeterFill, cfg.MeterFill)
-	applyStyle(&th.MeterEmpty, cfg.MeterEmpty)
-	applyStyle(&th.Highlight, cfg.Highlight)
+	applyStyle(&th.BoxTitle, cfg.BoxTitle, termcap.ColorTrueColor)
+	applyStyle(&th.GraphCPU, cfg.GraphCPU, termcap.ColorTrueColor)
+	applyStyle(&th.GraphMem, cfg.GraphMem, termcap.ColorTrueColor)
+	applyStyle(&th.GraphNet, cfg.GraphNet, termcap.ColorTrueColor)
+	applyStyle(&th.MeterFill, cfg.MeterFill, termcap.ColorTrueColor)
+	applyStyle(&th.MeterEmpty, cfg.MeterEmpty, termcap.ColorTrueColor)
+	applyStyle(&th.Highlight, cfg.Highlight, termcap.ColorTrueColor)
 	return th, nil
+}
+
+func (t Theme) WithCapabilities(caps termcap.Capabilities) Theme {
+	t.UTF8 = caps.UTF8
+	t.ColorLevel = caps.Color
+	if t.rawCfg != nil && caps.Color < termcap.ColorTrueColor {
+		// Re-apply styles using fallback colors appropriate for the
+		// detected color level.
+		cfg := t.rawCfg
+		applyStyle(&t.Header, cfg.Header, caps.Color)
+		applyStyle(&t.Text, cfg.Text, caps.Color)
+		applyStyle(&t.Muted, cfg.Muted, caps.Color)
+		applyStyle(&t.Error, cfg.Error, caps.Color)
+		applyStyle(&t.BoxTitle, cfg.BoxTitle, caps.Color)
+		applyStyle(&t.GraphCPU, cfg.GraphCPU, caps.Color)
+		applyStyle(&t.GraphMem, cfg.GraphMem, caps.Color)
+		applyStyle(&t.GraphNet, cfg.GraphNet, caps.Color)
+		applyStyle(&t.MeterFill, cfg.MeterFill, caps.Color)
+		applyStyle(&t.MeterEmpty, cfg.MeterEmpty, caps.Color)
+		applyStyle(&t.Highlight, cfg.Highlight, caps.Color)
+	}
+	return t
 }
 
 // BoxChrome returns the total vertical and horizontal non-content overhead
@@ -150,7 +186,17 @@ func (t Theme) RenderBox(title, body string, width, height int) string {
 		box = box.Width(width)
 	}
 	if height > 0 {
-		box = box.Height(height)
+		box = box.Height(height).MaxHeight(height)
+		// Strictly enforce height by truncating content that exceeds the inner budget.
+		vChrome, _ := t.BoxChrome()
+		innerH := height - vChrome
+		if innerH < 0 {
+			innerH = 0
+		}
+		lines := strings.Split(content, "\n")
+		if len(lines) > innerH {
+			content = strings.Join(lines[:innerH], "\n")
+		}
 	}
 	return box.Render(content)
 }
@@ -163,13 +209,50 @@ func themePath(name string) (string, error) {
 	return filepath.Join(dir, "dtop", "themes", name+".toml"), nil
 }
 
-func applyStyle(target *lipgloss.Style, cfg styleConfig) {
-	s := *target
-	if cfg.Fg != "" {
-		s = s.Foreground(lipgloss.Color(cfg.Fg))
+// resolveFg picks the best foreground color for the given terminal color level.
+// Fallback priority: fg_16 < fg_256 < fg (truecolor).
+func resolveFg(cfg styleConfig, level termcap.ColorLevel) string {
+	switch level {
+	case termcap.ColorANSI16:
+		if cfg.Fg16 != "" {
+			return cfg.Fg16
+		}
+		return cfg.Fg
+	case termcap.ColorANSI256:
+		if cfg.Fg256 != "" {
+			return cfg.Fg256
+		}
+		return cfg.Fg
+	default:
+		return cfg.Fg
 	}
-	if cfg.Bg != "" {
-		s = s.Background(lipgloss.Color(cfg.Bg))
+}
+
+// resolveBg picks the best background color for the given terminal color level.
+func resolveBg(cfg styleConfig, level termcap.ColorLevel) string {
+	switch level {
+	case termcap.ColorANSI16:
+		if cfg.Bg16 != "" {
+			return cfg.Bg16
+		}
+		return cfg.Bg
+	case termcap.ColorANSI256:
+		if cfg.Bg256 != "" {
+			return cfg.Bg256
+		}
+		return cfg.Bg
+	default:
+		return cfg.Bg
+	}
+}
+
+func applyStyle(target *lipgloss.Style, cfg styleConfig, level termcap.ColorLevel) {
+	s := *target
+	if fg := resolveFg(cfg, level); fg != "" {
+		s = s.Foreground(lipgloss.Color(fg))
+	}
+	if bg := resolveBg(cfg, level); bg != "" {
+		s = s.Background(lipgloss.Color(bg))
 	}
 	if cfg.Bold != nil {
 		s = s.Bold(*cfg.Bold)

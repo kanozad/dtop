@@ -3,7 +3,10 @@ package theme
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"mld.com/dtop/internal/termcap"
 )
 
 func writeThemeFile(t *testing.T, root, name, content string) {
@@ -68,5 +71,62 @@ padding = 1
 
 	if _, err := FromName("custom"); err != nil {
 		t.Fatalf("FromName: %v", err)
+	}
+}
+
+func TestThemeWithCapabilities(t *testing.T) {
+	th := Default()
+	if !th.UTF8 {
+		t.Fatalf("expected default theme utf8=true")
+	}
+	th = th.WithCapabilities(termcap.Capabilities{UTF8: false})
+	if th.UTF8 {
+		t.Fatalf("expected theme utf8 flag to be updated")
+	}
+}
+
+func TestRenderBoxHeightEnforcement(t *testing.T) {
+	t.Parallel()
+
+	th := Default()
+	vChrome, _ := th.BoxChrome()
+
+	tests := []struct {
+		name   string
+		title  string
+		body   string
+		height int
+	}{
+		{
+			name:   "single line body fits",
+			body:   "line 1",
+			height: vChrome + 1,
+		},
+		{
+			name:   "multi line body truncated",
+			body:   "line 1\nline 2\nline 3",
+			height: vChrome + 1,
+		},
+		{
+			name:   "title + body truncated",
+			title:  "Title",
+			body:   "line 1\nline 2",
+			height: vChrome + 1, // title + border = vChrome + 1
+		},
+		{
+			name:   "zero height budget",
+			body:   "something",
+			height: vChrome - 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := th.RenderBox(tt.title, tt.body, 20, tt.height)
+			lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+			if tt.height > 0 && len(lines) > tt.height {
+				t.Errorf("RenderBox() output %d lines, want <= %d", len(lines), tt.height)
+			}
+		})
 	}
 }

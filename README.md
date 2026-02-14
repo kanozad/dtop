@@ -30,9 +30,12 @@ An example config lives at `docs/dtop.toml.example`.
 ## Configuration
 
 - Global interval: `update_interval = "2s"`
+- Optional live reload: `live_reload = true` (reloads when config file changes)
 - Theme: `theme.name = "default"` (custom themes in `~/.config/dtop/themes/<name>.toml`)
+- Bundled themes: `tokyonight-moon`, `tokyonight-storm` (see `docs/theme-schema.md` for installation)
 - Layout: `layout.mode` ("grid", "flow", "vertical"); `layout.columns` sets fixed columns for grid mode
 - Plugins: list in `plugins.enabled`, config under `plugins.config.<plugin_id>`
+- Presets: `[presets.<slot>]` for slot `0-9` with `layout_mode`, `layout_columns`, `update_interval`, `visible_boxes`
 
 CPU plugin options:
 
@@ -48,7 +51,9 @@ Process plugin options:
 - `follow_pid` (int): follow a specific PID on startup (0 disables)
 - `use_smaps` (bool): use /proc/[pid]/smaps for detailed memory (slower)
 
-Process list controls: up/down to move selection (">" indicator), PgUp/PgDown to page, `f` to follow, `c` to collapse/expand, `x`/`X` to send SIGTERM/SIGKILL, `r`/`R` to renice +1/-1. Signal/renice actions are permission-gated and will report errors in the header.
+Process list controls: up/down to move selection (">" indicator), PgUp/PgDown to page, `f`/`F3` filter edit mode, `F` follow toggle, `Enter` detail view, `c` collapse/expand, `x`/`X` signal chooser, `r`/`R` renice +1/-1. Signal/renice actions are permission-gated and will report errors in the header.
+
+Preset controls: press `p`, then slot `0-9` to load; `P` then slot to save; `D` then slot to delete; `E` then slot to export a single slot to `<config-dir>/presets/preset-<slot>.toml`; `I` then slot to import that exported slot file and apply it immediately.
 
 ## Tests and formatting
 
@@ -79,5 +84,5 @@ Common pitfalls:
 
 - `docs/architecture.md` — high-level architecture and data flow
 - `docs/dtop-requirements.md` — roadmap and design goals
-- `docs/theme-schema.md` — theme file schema
+- `docs/theme-schema.md` — theme file schema and bundled themes
 - `docs/plugins.md` — how to build/register plugins

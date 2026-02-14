@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/mattn/go-runewidth"
 
 	"mld.com/dtop/internal/plugin"
 	"mld.com/dtop/internal/theme"
@@ -30,10 +29,7 @@ type Memory struct {
 	mu   sync.Mutex
 	prev map[string]diskIOCounters
 
-	// histories sized to current viewport width (inner content width)
-	memoryHistory []float64
-	swapHistory   []float64
-	lastWidth     int
+	lastWidth int
 }
 
 func New() *Memory {
@@ -51,6 +47,9 @@ func New() *Memory {
 
 func (m *Memory) ID() plugin.ID { return "memory" }
 func (m *Memory) Name() string  { return "Memory" }
+func (m *Memory) SizeHint() ui.SizeHint {
+	return ui.SizeHint{MinH: 3, PrefH: 8, MaxH: 0, Weight: 2}
+}
 func (m *Memory) AllowedConfigKeys() []string {
 	return []string{"show_swap", "show_disks", "show_io_stat", "base_10_sizes", "zfs_arc_cached", "disks_filter"}
 }
@@ -70,9 +69,6 @@ func (m *Memory) Collect(context.Context) (collector.Data, error) {
 	}
 	m.prev = nextPrev
 
-	targetWidth := m.targetWidth()
-	m.appendHistory(&stats, targetWidth)
-
 	return stats, nil
 }
 
@@ -85,16 +81,42 @@ func (m *Memory) View(data collector.Data, width, height int, th theme.Theme) st
 	if !ok {
 		return th.RenderBox("Memory", th.Muted.Render("Collecting..."), width, height)
 	}
-	innerWidth := contentWidth(width)
+	innerWidth := ui.ContentWidth(width)
 	m.mu.Lock()
 	m.lastWidth = innerWidth
-	m.reflowHistory(&stats, innerWidth)
 	m.mu.Unlock()
 
-	meterOpts := ui.MeterOpts{FillStyle: th.MeterFill, EmptyStyle: th.MeterEmpty}
+	meterOpts := ui.MeterOpts{FillStyle: th.MeterFill, EmptyStyle: th.MeterEmpty, ASCII: !th.UTF8}
 	lines := []string{}
 
 	// RAM meter
+	lines = append(lines, m.renderRAMBar(&stats, innerWidth, meterOpts))
+
+	// Memory history graph
+	if g := m.renderHistoryGraph(&stats, innerWidth, height, th); g != "" {
+		lines = append(lines, g)
+	}
+
+	// Cached + ZFS ARC summary
+	if s := m.renderExtraSummary(&stats, innerWidth, th); s != "" {
+		lines = append(lines, s)
+	}
+
+	// Swap meter
+	if m.cfg.ShowSwap && stats.SwapTotal > 0 {
+		lines = append(lines, m.renderSwapBar(&stats, innerWidth, meterOpts))
+	}
+
+	// Disk stats with capacity bars
+	if m.cfg.ShowDisks && len(stats.Disks) > 0 {
+		lines = append(lines, m.renderDiskStats(&stats, innerWidth, th, meterOpts)...)
+	}
+
+	body := strings.Join(lines, "\n")
+	return th.RenderBox("Memory", body, width, height)
+}
+
+func (m *Memory) renderRAMBar(stats *types.MemoryStats, width int, opts ui.MeterOpts) string {
 	ramUsedPct := 0.0
 	if stats.RAMTotal > 0 {
 		ramUsedPct = float64(stats.RAMUsed) * 100.0 / float64(stats.RAMTotal)
@@ -102,18 +124,28 @@ func (m *Memory) View(data collector.Data, width, height int, th theme.Theme) st
 	ramLabel := fmt.Sprintf("RAM %s/%s",
 		formatBytes(stats.RAMUsed, m.cfg.Base10Sizes),
 		formatBytes(stats.RAMTotal, m.cfg.Base10Sizes))
-	lines = append(lines, ui.RenderMeter(ramLabel, ramUsedPct, innerWidth, meterOpts))
+	return ui.RenderMeter(ramLabel, ramUsedPct, width, opts)
+}
 
-	// Memory history graph
+func (m *Memory) renderSwapBar(stats *types.MemoryStats, width int, opts ui.MeterOpts) string {
+	swapUsedPct := float64(stats.SwapUsed) * 100.0 / float64(stats.SwapTotal)
+	swapLabel := fmt.Sprintf("Swap %s/%s",
+		formatBytes(stats.SwapUsed, m.cfg.Base10Sizes),
+		formatBytes(stats.SwapTotal, m.cfg.Base10Sizes))
+	return ui.RenderMeter(swapLabel, swapUsedPct, width, opts)
+}
+
+func (m *Memory) renderHistoryGraph(stats *types.MemoryStats, width, height int, th theme.Theme) string {
 	graphHeight := memGraphRows(height)
 	if graphHeight > 0 && len(stats.MemoryHistory) > 0 {
-		g := ui.RenderGraph(stats.MemoryHistory, innerWidth, graphHeight, ui.GraphOpts{
-			Min: 0, Max: 100, Style: th.GraphMem, Fill: true,
+		return ui.RenderGraph(stats.MemoryHistory, width, graphHeight, ui.GraphOpts{
+			Min: 0, Max: 100, Style: th.GraphMem, Fill: true, ASCII: !th.UTF8,
 		})
-		lines = append(lines, g)
 	}
+	return ""
+}
 
-	// Cached + ZFS ARC summary
+func (m *Memory) renderExtraSummary(stats *types.MemoryStats, width int, th theme.Theme) string {
 	var extras []string
 	if stats.RAMCached > 0 {
 		extras = append(extras, fmt.Sprintf("Cached: %s", formatBytes(stats.RAMCached, m.cfg.Base10Sizes)))
@@ -122,43 +154,37 @@ func (m *Memory) View(data collector.Data, width, height int, th theme.Theme) st
 		extras = append(extras, fmt.Sprintf("ZFS ARC: %s", formatBytes(*stats.ZFSARCSize, m.cfg.Base10Sizes)))
 	}
 	if len(extras) > 0 {
-		lines = append(lines, th.Muted.Render(truncate(strings.Join(extras, "  "), innerWidth)))
+		return th.Muted.Render(ui.Truncate(strings.Join(extras, "  "), width))
 	}
+	return ""
+}
 
-	// Swap meter
-	if m.cfg.ShowSwap && stats.SwapTotal > 0 {
-		swapUsedPct := float64(stats.SwapUsed) * 100.0 / float64(stats.SwapTotal)
-		swapLabel := fmt.Sprintf("Swap %s/%s",
-			formatBytes(stats.SwapUsed, m.cfg.Base10Sizes),
-			formatBytes(stats.SwapTotal, m.cfg.Base10Sizes))
-		lines = append(lines, ui.RenderMeter(swapLabel, swapUsedPct, innerWidth, meterOpts))
+func (m *Memory) renderDiskStats(stats *types.MemoryStats, width int, th theme.Theme, opts ui.MeterOpts) []string {
+	var lines []string
+	hr := "-"
+	if th.UTF8 {
+		hr = "─"
 	}
+	lines = append(lines, strings.Repeat(hr, width))
+	for _, disk := range stats.Disks {
+		usedPct := 0.0
+		if disk.Total > 0 {
+			usedPct = float64(disk.Used) * 100.0 / float64(disk.Total)
+		}
+		diskLabel := fmt.Sprintf("%-12s %s/%s",
+			ui.Truncate(disk.MountPoint, 12),
+			formatBytes(disk.Used, m.cfg.Base10Sizes),
+			formatBytes(disk.Total, m.cfg.Base10Sizes))
+		lines = append(lines, ui.RenderMiniMeter(diskLabel, usedPct, width, opts))
 
-	// Disk stats with capacity bars
-	if m.cfg.ShowDisks && len(stats.Disks) > 0 {
-		lines = append(lines, strings.Repeat("─", innerWidth))
-		for _, disk := range stats.Disks {
-			usedPct := 0.0
-			if disk.Total > 0 {
-				usedPct = float64(disk.Used) * 100.0 / float64(disk.Total)
-			}
-			diskLabel := fmt.Sprintf("%-12s %s/%s",
-				truncate(disk.MountPoint, 12),
-				formatBytes(disk.Used, m.cfg.Base10Sizes),
-				formatBytes(disk.Total, m.cfg.Base10Sizes))
-			lines = append(lines, ui.RenderMiniMeter(diskLabel, usedPct, innerWidth, meterOpts))
-
-			if m.cfg.ShowIOStat {
-				ioLine := fmt.Sprintf("  R: %s/s  W: %s/s",
-					formatBytes(uint64(disk.ReadBytesPerSec), m.cfg.Base10Sizes),
-					formatBytes(uint64(disk.WriteBytesPerSec), m.cfg.Base10Sizes))
-				lines = append(lines, th.Muted.Render(truncate(ioLine, innerWidth)))
-			}
+		if m.cfg.ShowIOStat {
+			ioLine := fmt.Sprintf("  R: %s/s  W: %s/s",
+				formatBytes(uint64(disk.ReadBytesPerSec), m.cfg.Base10Sizes),
+				formatBytes(uint64(disk.WriteBytesPerSec), m.cfg.Base10Sizes))
+			lines = append(lines, th.Muted.Render(ui.Truncate(ioLine, width)))
 		}
 	}
-
-	body := strings.Join(lines, "\n")
-	return th.RenderBox("Memory", body, width, height)
+	return lines
 }
 
 func memGraphRows(boxHeight int) int {
@@ -172,33 +198,29 @@ func memGraphRows(boxHeight int) int {
 	return inner
 }
 
-func (m *Memory) appendHistory(stats *types.MemoryStats, width int) {
-	// memory % history
-	memPct := 0.0
-	if stats.RAMTotal > 0 {
-		memPct = float64(stats.RAMUsed) * 100.0 / float64(stats.RAMTotal)
+func (m *Memory) UpdateHistory(h *types.HistoryStore, data collector.Data, width int) collector.Data {
+	stats, ok := data.(types.MemoryStats)
+	if !ok {
+		return data
 	}
-	m.memoryHistory = pushAndClamp(m.memoryHistory, memPct, width)
-	stats.MemoryHistory = m.memoryHistory
 
-	// swap % history
+	// RAM % history
+	ramPct := 0.0
+	if stats.RAMTotal > 0 {
+		ramPct = float64(stats.RAMUsed) * 100.0 / float64(stats.RAMTotal)
+	}
+	h.Push("mem.ram", ramPct, width)
+	stats.MemoryHistory = h.Get("mem.ram")
+
+	// Swap % history
 	swapPct := 0.0
 	if stats.SwapTotal > 0 {
 		swapPct = float64(stats.SwapUsed) * 100.0 / float64(stats.SwapTotal)
 	}
-	m.swapHistory = pushAndClamp(m.swapHistory, swapPct, width)
-	stats.SwapHistory = m.swapHistory
-}
+	h.Push("mem.swap", swapPct, width)
+	stats.SwapHistory = h.Get("mem.swap")
 
-func (m *Memory) reflowHistory(stats *types.MemoryStats, width int) {
-	if width <= 0 {
-		return
-	}
-	m.memoryHistory = resizeHistory(m.memoryHistory, width)
-	stats.MemoryHistory = m.memoryHistory
-
-	m.swapHistory = resizeHistory(m.swapHistory, width)
-	stats.SwapHistory = m.swapHistory
+	return stats
 }
 
 func (m *Memory) targetWidth() int {
@@ -206,54 +228,6 @@ func (m *Memory) targetWidth() int {
 		return m.lastWidth
 	}
 	return 80
-}
-
-func pushAndClamp(hist []float64, value float64, width int) []float64 {
-	if width <= 0 {
-		return hist
-	}
-	hist = append(hist, value)
-	if len(hist) > width {
-		hist = hist[len(hist)-width:]
-	}
-	return hist
-}
-
-func resizeHistory(hist []float64, width int) []float64 {
-	if width <= 0 {
-		return hist
-	}
-	// trim
-	if len(hist) > width {
-		hist = hist[len(hist)-width:]
-	}
-	// pad with last value if growing
-	if len(hist) < width {
-		padVal := 0.0
-		if len(hist) > 0 {
-			padVal = hist[len(hist)-1]
-		}
-		for len(hist) < width {
-			hist = append(hist, padVal)
-		}
-	}
-	return hist
-}
-
-func contentWidth(totalWidth int) int {
-	// Account for box padding (default 1 left/right) and border.
-	w := totalWidth - 4
-	if w < 1 {
-		return 1
-	}
-	return w
-}
-
-func truncate(s string, width int) string {
-	if width <= 0 {
-		return s
-	}
-	return runewidth.Truncate(s, width, "…")
 }
 
 func formatBytes(bytes uint64, base10 bool) string {

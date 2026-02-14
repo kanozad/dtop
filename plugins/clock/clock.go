@@ -8,6 +8,7 @@ import (
 
 	"mld.com/dtop/internal/plugin"
 	"mld.com/dtop/internal/theme"
+	"mld.com/dtop/internal/ui"
 	"mld.com/dtop/pkg/collector"
 )
 
@@ -19,6 +20,9 @@ func (c *Clock) ID() plugin.ID                  { return "clock" }
 func (c *Clock) Name() string                   { return "Clock" }
 func (c *Clock) AllowedConfigKeys() []string    { return nil }
 func (c *Clock) Shutdown(context.Context) error { return nil }
+func (c *Clock) SizeHint() ui.SizeHint {
+	return ui.SizeHint{MinH: 1, PrefH: 1, MaxH: 1, Weight: 0}
+}
 
 func (c *Clock) Init(context.Context, map[string]any) error {
 	return nil

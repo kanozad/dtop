@@ -11,6 +11,21 @@ func plainStyle() lipgloss.Style {
 	return lipgloss.NewStyle()
 }
 
+func TestRenderGraphASCIIFallback(t *testing.T) {
+	data := []float64{0, 50, 100}
+	out := RenderGraph(data, 3, 2, GraphOpts{Min: 0, Max: 100, Style: plainStyle(), Fill: true, ASCII: true})
+	rows := strings.Split(out, "\n")
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(rows))
+	}
+	for _, r := range out {
+		if r == '\n' || r == ' ' || r == '#' {
+			continue
+		}
+		t.Fatalf("expected ascii-safe graph output, found rune %q", r)
+	}
+}
+
 func TestRenderGraph_Empty(t *testing.T) {
 	if out := RenderGraph(nil, 0, 0, GraphOpts{}); out != "" {
 		t.Errorf("expected empty, got %q", out)

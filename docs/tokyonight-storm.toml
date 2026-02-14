@@ -1,0 +1,70 @@
+# Tokyo Night Storm theme for DTOP
+# Inspired by the btop++ tokyonight_storm theme by Folke Lemaitre.
+# Save as ~/.config/dtop/themes/tokyonight-storm.toml
+
+[header]
+fg = "#c0caf5"
+fg_256 = "189"
+fg_16 = "15"
+bold = true
+
+[text]
+fg = "#c0caf5"
+fg_256 = "189"
+fg_16 = "7"
+
+[muted]
+fg = "#565f89"
+fg_256 = "60"
+fg_16 = "8"
+
+[error]
+fg = "#f7768e"
+fg_256 = "210"
+fg_16 = "9"
+bold = true
+
+[box]
+border = "rounded"
+border_fg = "#29a4bd"
+bg = "#24283b"
+bg_256 = "235"
+padding_y = 0
+padding_x = 1
+
+[box_title]
+fg = "#c0caf5"
+fg_256 = "189"
+fg_16 = "15"
+bold = true
+
+[graph_cpu]
+fg = "#9ece6a"
+fg_256 = "149"
+fg_16 = "10"
+
+[graph_mem]
+fg = "#e0af68"
+fg_256 = "179"
+fg_16 = "11"
+
+[graph_net]
+fg = "#7dcfff"
+fg_256 = "117"
+fg_16 = "14"
+
+[meter_fill]
+fg = "#9ece6a"
+fg_256 = "149"
+fg_16 = "10"
+
+[meter_empty]
+fg = "#292e42"
+fg_256 = "236"
+fg_16 = "8"
+
+[highlight]
+fg = "#7dcfff"
+fg_256 = "117"
+fg_16 = "14"
+bold = true

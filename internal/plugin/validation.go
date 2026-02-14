@@ -13,6 +13,12 @@ type ConfigValidator interface {
 	AllowedConfigKeys() []string
 }
 
+const (
+	// GlobalPluginIntervalKey is a reserved plugin config key supported by the
+	// app scheduler for per-plugin collection cadence overrides.
+	GlobalPluginIntervalKey = "interval"
+)
+
 // ValidateConfig checks for unknown keys in cfg.
 func ValidateConfig(id ID, cfg map[string]any, allowedKeys ...string) error {
 	if len(cfg) == 0 {
@@ -22,6 +28,7 @@ func ValidateConfig(id ID, cfg map[string]any, allowedKeys ...string) error {
 	for _, key := range allowedKeys {
 		allowed[key] = struct{}{}
 	}
+	allowed[GlobalPluginIntervalKey] = struct{}{}
 	unknown := make([]string, 0, len(cfg))
 	for key := range cfg {
 		if _, ok := allowed[key]; !ok {

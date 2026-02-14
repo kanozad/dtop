@@ -4,6 +4,9 @@
 # How often collectors should refresh.
 update_interval = "2s"
 
+# Reload config changes on the fly when this file changes.
+live_reload = false
+
 [theme]
 # Theme name. "default" uses the built-in theme.
 # Custom themes live at ~/.config/dtop/themes/<name>.toml
@@ -27,15 +30,27 @@ enabled = ["clock", "cpu", "memory", "network", "process"]
 
 [plugins.config.clock]
 # No options yet.
+# Optional per-plugin collection interval override.
+# interval = "1s"
 
 [plugins.config.cpu]
+# Optional per-plugin collection interval override.
+# interval = "1s"
 # Show per-core utilization lines.
 per_core = true
 
 # Attempt to read CPU temperature (Linux).
 show_temp = false
 
+# Show average CPU frequency.
+show_freq = true
+
+# Show CPU package power draw via RAPL (Linux, requires permissions).
+show_watts = false
+
 [plugins.config.memory]
+# Optional per-plugin collection interval override.
+# interval = "2s"
 # Show swap usage.
 show_swap = true
 
@@ -56,13 +71,22 @@ zfs_arc_cached = false
 # disks_filter = []
 
 [plugins.config.network]
+# Optional per-plugin collection interval override.
+# interval = "1s"
 # Interface name to monitor (empty selects the first non-loopback interface).
 interface = ""
 
 # Show IPv6 addresses (if present).
 show_ipv6 = true
 
+[plugins.config.battery]
+# No battery-specific options yet.
+# Optional per-plugin collection interval override.
+# interval = "5s"
+
 [plugins.config.process]
+# Optional per-plugin collection interval override.
+# interval = "2s"
 # Show process tree view with parent-child relationships.
 tree_view = false
 
@@ -80,3 +104,19 @@ max_display = 20
 
 # Use /proc/[pid]/smaps for detailed memory (slower).
 use_smaps = false
+
+# Optional preset slots (0-9). Load with: p then slot digit.
+# Save current view into a slot with: P then slot digit.
+# Delete a saved slot with: D then slot digit.
+# Export a slot to <config-dir>/presets/preset-<slot>.toml with: E then slot digit.
+# Import a slot from <config-dir>/presets/preset-<slot>.toml with: I then slot digit.
+[presets.1]
+layout_mode = "grid"
+layout_columns = 2
+update_interval = "2s"
+visible_boxes = ["cpu", "memory", "network", "process"]
+
+[presets.2]
+layout_mode = "vertical"
+update_interval = "1s"
+visible_boxes = ["cpu", "process"]

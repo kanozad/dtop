@@ -3,9 +3,11 @@
 package cpu
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func writeTempFile(t *testing.T, dir, name, content string) string {
@@ -82,5 +84,76 @@ func TestReadLoadAvg(t *testing.T) {
 	}
 	if load1 != 0.5 || load5 != 1.0 || load15 != 1.5 {
 		t.Fatalf("unexpected load values: %v %v %v", load1, load5, load15)
+	}
+}
+
+func TestReadCoreFrequencies(t *testing.T) {
+	t.Parallel()
+
+	// readCoreFrequencies reads from /sys which may or may not exist.
+	// We test that the function returns a valid slice on this machine
+	// (could be nil on VMs without cpufreq).
+	freqs := readCoreFrequencies(2)
+	if freqs != nil {
+		if len(freqs) != 2 {
+			t.Fatalf("expected 2 frequencies, got %d", len(freqs))
+		}
+		for i, f := range freqs {
+			if f <= 0 || f > 10000 {
+				t.Fatalf("core %d: frequency %f out of plausible range", i, f)
+			}
+		}
+	}
+}
+
+func TestReadCoreFrequenciesZeroCores(t *testing.T) {
+	t.Parallel()
+	if freqs := readCoreFrequencies(0); freqs != nil {
+		t.Fatalf("expected nil for 0 cores, got %v", freqs)
+	}
+}
+
+func TestReadCPUStatsWithFreqAndWatts(t *testing.T) {
+	t.Parallel()
+
+	// First collect to establish baselines.
+	opts := collectOpts{showTemp: false, showFreq: true, showWatts: true}
+	stats, prev, rs, err := readCPUStats(nil, opts)
+	if err != nil {
+		t.Fatalf("first collect: %v", err)
+	}
+	if stats.Cores == 0 {
+		t.Fatal("expected at least 1 core")
+	}
+
+	// Frequency may or may not be available depending on environment.
+	if stats.FrequencyMHz != nil {
+		if len(stats.FrequencyMHz) != stats.Cores {
+			t.Fatalf("frequency slice length %d != cores %d", len(stats.FrequencyMHz), stats.Cores)
+		}
+		if stats.FrequencyAvgMHz <= 0 {
+			t.Fatalf("expected positive avg frequency, got %f", stats.FrequencyAvgMHz)
+		}
+	}
+
+	// PowerWatts should be nil on first collect (no previous RAPL baseline).
+	if stats.PowerWatts != nil {
+		t.Fatalf("expected nil PowerWatts on first collect")
+	}
+
+	// Second collect with prior RAPL state.
+	time.Sleep(50 * time.Millisecond)
+	opts.prevRAPLEnergy = rs.energy
+	opts.prevRAPLTime = rs.timestamp
+	stats2, _, _, err := readCPUStats(prev, opts)
+	if err != nil {
+		t.Fatalf("second collect: %v", err)
+	}
+
+	// If RAPL is available, watts should now be set.
+	if rs.energy > 0 && stats2.PowerWatts != nil {
+		if *stats2.PowerWatts < 0 || math.IsNaN(*stats2.PowerWatts) {
+			t.Fatalf("implausible watts: %f", *stats2.PowerWatts)
+		}
 	}
 }

@@ -15,5 +15,15 @@ func parseConfig(defaults Config, cfg map[string]any) Config {
 			out.ShowTemp = b
 		}
 	}
+	if v, ok := cfg["show_freq"]; ok {
+		if b, ok := v.(bool); ok {
+			out.ShowFreq = b
+		}
+	}
+	if v, ok := cfg["show_watts"]; ok {
+		if b, ok := v.(bool); ok {
+			out.ShowWatts = b
+		}
+	}
 	return out
 }

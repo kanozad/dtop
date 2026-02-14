@@ -8,6 +8,6 @@ import (
 	"mld.com/dtop/pkg/types"
 )
 
-func readCPUStats(prev map[string]cpuTimes, _ bool) (types.CPUStats, map[string]cpuTimes, error) {
-	return types.CPUStats{}, prev, errors.New("cpu collector not supported on this platform")
+func readCPUStats(prev map[string]cpuTimes, _ collectOpts) (types.CPUStats, map[string]cpuTimes, raplState, error) {
+	return types.CPUStats{}, prev, raplState{}, errors.New("cpu collector not supported on this platform")
 }

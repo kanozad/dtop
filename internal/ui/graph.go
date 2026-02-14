@@ -15,6 +15,8 @@ type GraphOpts struct {
 	Style lipgloss.Style
 	// Fill renders a filled area graph when true; otherwise a line graph.
 	Fill bool
+	// ASCII forces ASCII-safe graph rendering (no braille glyphs).
+	ASCII bool
 }
 
 // RenderGraph draws a braille sparkline from a time-series data slice.
@@ -29,6 +31,9 @@ type GraphOpts struct {
 func RenderGraph(data []float64, width, height int, opts GraphOpts) string {
 	if width <= 0 || height <= 0 {
 		return ""
+	}
+	if opts.ASCII {
+		return renderASCIIGraph(data, width, height, opts)
 	}
 	if opts.Max <= opts.Min {
 		opts.Max = opts.Min + 1
@@ -84,6 +89,57 @@ func RenderGraph(data []float64, width, height int, opts GraphOpts) string {
 				}
 			}
 			sb.WriteRune(brailleFromDots(dots))
+		}
+		rows[row] = opts.Style.Render(sb.String())
+	}
+	return strings.Join(rows, "\n")
+}
+
+func renderASCIIGraph(data []float64, width, height int, opts GraphOpts) string {
+	if opts.Max <= opts.Min {
+		opts.Max = opts.Min + 1
+	}
+
+	d := data
+	if len(d) > width {
+		d = d[len(d)-width:]
+	}
+
+	levels := make([]int, width)
+	for i := 0; i < width; i++ {
+		if i < width-len(d) {
+			levels[i] = 0
+			continue
+		}
+		v := d[i-(width-len(d))]
+		v = clampF(v, opts.Min, opts.Max)
+		frac := (v - opts.Min) / (opts.Max - opts.Min)
+		levels[i] = int(frac * float64(height))
+		if levels[i] > height {
+			levels[i] = height
+		}
+	}
+
+	rows := make([]string, height)
+	for row := 0; row < height; row++ {
+		rowLevel := height - row
+		var sb strings.Builder
+		for col := 0; col < width; col++ {
+			on := false
+			if opts.Fill {
+				on = levels[col] >= rowLevel
+			} else {
+				on = levels[col] == rowLevel
+			}
+			if on {
+				if opts.Fill {
+					sb.WriteByte('#')
+				} else {
+					sb.WriteByte('*')
+				}
+			} else {
+				sb.WriteByte(' ')
+			}
 		}
 		rows[row] = opts.Style.Render(sb.String())
 	}

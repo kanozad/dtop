@@ -12,6 +12,7 @@ import (
 type MeterOpts struct {
 	FillStyle  lipgloss.Style
 	EmptyStyle lipgloss.Style
+	ASCII      bool
 }
 
 // RenderMeter draws a single-line percentage bar:
@@ -41,7 +42,7 @@ func RenderMeter(label string, pct float64, width int, opts MeterOpts) string {
 	if barWidth < 3 {
 		// Fall back to compact mode without bar.
 		compact := fmt.Sprintf("%s %s", label, pctStr)
-		return runewidth.Truncate(compact, width, "…")
+		return runewidth.Truncate(compact, width, "...")
 	}
 
 	filled := int(pct / 100.0 * float64(barWidth))
@@ -50,8 +51,12 @@ func RenderMeter(label string, pct float64, width int, opts MeterOpts) string {
 	}
 	empty := barWidth - filled
 
-	fillStr := opts.FillStyle.Render(strings.Repeat("█", filled))
-	emptyStr := opts.EmptyStyle.Render(strings.Repeat("░", empty))
+	fillGlyph, emptyGlyph := "█", "░"
+	if opts.ASCII {
+		fillGlyph, emptyGlyph = "=", "-"
+	}
+	fillStr := opts.FillStyle.Render(strings.Repeat(fillGlyph, filled))
+	emptyStr := opts.EmptyStyle.Render(strings.Repeat(emptyGlyph, empty))
 
 	return fmt.Sprintf("%s [%s%s] %s", label, fillStr, emptyStr, pctStr)
 }
@@ -78,7 +83,7 @@ func RenderMiniMeter(label string, pct float64, width int, opts MeterOpts) strin
 	barWidth := width - overhead
 	if barWidth < 2 {
 		compact := fmt.Sprintf("%s %s", label, pctStr)
-		return runewidth.Truncate(compact, width, "…")
+		return runewidth.Truncate(compact, width, "...")
 	}
 
 	filled := int(pct / 100.0 * float64(barWidth))
@@ -87,8 +92,12 @@ func RenderMiniMeter(label string, pct float64, width int, opts MeterOpts) strin
 	}
 	empty := barWidth - filled
 
-	fillStr := opts.FillStyle.Render(strings.Repeat("█", filled))
-	emptyStr := opts.EmptyStyle.Render(strings.Repeat("░", empty))
+	fillGlyph, emptyGlyph := "█", "░"
+	if opts.ASCII {
+		fillGlyph, emptyGlyph = "=", "-"
+	}
+	fillStr := opts.FillStyle.Render(strings.Repeat(fillGlyph, filled))
+	emptyStr := opts.EmptyStyle.Render(strings.Repeat(emptyGlyph, empty))
 
 	return fmt.Sprintf("%s %s%s %s", label, fillStr, emptyStr, pctStr)
 }

@@ -1,0 +1,70 @@
+# Tokyo Night Moon theme for DTOP
+# Inspired by the btop++ tokyonight_moon theme by Folke Lemaitre.
+# Save as ~/.config/dtop/themes/tokyonight-moon.toml
+
+[header]
+fg = "#c8d3f5"
+fg_256 = "189"
+fg_16 = "15"
+bold = true
+
+[text]
+fg = "#c8d3f5"
+fg_256 = "189"
+fg_16 = "7"
+
+[muted]
+fg = "#636da6"
+fg_256 = "60"
+fg_16 = "8"
+
+[error]
+fg = "#ff757f"
+fg_256 = "210"
+fg_16 = "9"
+bold = true
+
+[box]
+border = "rounded"
+border_fg = "#589ed7"
+bg = "#222436"
+bg_256 = "235"
+padding_y = 0
+padding_x = 1
+
+[box_title]
+fg = "#c8d3f5"
+fg_256 = "189"
+fg_16 = "15"
+bold = true
+
+[graph_cpu]
+fg = "#c3e88d"
+fg_256 = "150"
+fg_16 = "10"
+
+[graph_mem]
+fg = "#ffc777"
+fg_256 = "222"
+fg_16 = "11"
+
+[graph_net]
+fg = "#86e1fc"
+fg_256 = "117"
+fg_16 = "14"
+
+[meter_fill]
+fg = "#c3e88d"
+fg_256 = "150"
+fg_16 = "10"
+
+[meter_empty]
+fg = "#2f334d"
+fg_256 = "236"
+fg_16 = "8"
+
+[highlight]
+fg = "#86e1fc"
+fg_256 = "117"
+fg_16 = "14"
+bold = true

@@ -91,3 +91,14 @@ func TestRenderMiniMeter_ZeroWidth(t *testing.T) {
 		t.Errorf("expected empty, got %q", out)
 	}
 }
+
+func TestRenderMeter_ASCII(t *testing.T) {
+	opts := MeterOpts{FillStyle: plainStyle(), EmptyStyle: plainStyle(), ASCII: true}
+	out := RenderMeter("CPU", 50, 30, opts)
+	if strings.Contains(out, "█") || strings.Contains(out, "░") {
+		t.Fatalf("expected ascii glyphs, got %q", out)
+	}
+	if !strings.Contains(out, "=") || !strings.Contains(out, "-") {
+		t.Fatalf("expected ascii bar glyphs, got %q", out)
+	}
+}

@@ -13,16 +13,18 @@ This document summarizes the major components and data flow in DTOP, aligned wit
 
 ## Shared data contracts (language‑neutral)
 - Buffers sized to the current viewport width; trim oldest on resize.
-- CPU snapshot: total % history, per‑core % histories, optional temps/temps_max, load averages, optional watts.
+- CPU snapshot: total % history, per‑core % histories, optional temps/temps_max, load averages, optional watts, frequency (per‑core and avg MHz), container type and effective CPUs.
 - Memory snapshot: mem/swap stats, disk list with capacities and I/O deltas, historical % for mem/swap/zfs_arc.
 - Network snapshot: per‑direction bandwidth history, per‑iface totals/peaks, IPv4/IPv6, link state.
 - Process snapshot: pid, ppid, user, state, cmd (full/short), threads, nice, cpu%, mem bytes, start time, tree metadata (depth/prefix/collapsed), optional smaps detail cache.
 - GPU snapshot (optional): per‑GPU utilization %, mem %, temps, clocks, power, PCIe tx/rx, encoder/decoder % plus supported feature flags.
+- Battery snapshot (optional): charge %, status (charging/discharging/full), capacity health, power supply path.
 - Errors are attached to the plugin snapshot, not global state, to avoid overwriting unrelated modules.
 
 ## UI loop and rendering
 - Layout supports vertical, grid, and flow modes via `internal/ui` helpers; flow auto-computes columns to fit height while enforcing per-box minimums.
-- Box chrome accounting: each plugin box has non-content overhead (border + padding) exposed via `Theme.BoxChrome()`. The layout engine subtracts `vChrome * boxCount` from the height budget before splitting, so the rendered boxes (content + chrome) fit the terminal exactly. Plugins that would receive fewer than `minPluginHeight` content rows are hidden, and a muted warning is displayed.
+- Reactive sizing: each plugin declares a `SizeHint` (MinH, PrefH, MaxH, Weight). The layout engine allocates minimums first, then distributes surplus height proportionally by weight, capping at MaxH. Compact plugins (battery: MaxH=3, clock: MaxH=1) stop growing early; data-heavy plugins (process, CPU) absorb remaining space. This replaces the previous equal-split approach.
+- Box chrome accounting: each plugin box has non-content overhead (border + padding) exposed via `Theme.BoxChrome()`. The layout engine subtracts chrome before allocation. Plugins that cannot meet their MinH are hidden, and a muted warning is displayed.
 - Render order: clear region → borders → text/graphs → highlights → flush; prefer alt‑screen and synchronized output when supported.
 - Graphs auto‑scale; net graphs never below 10 KiB/s; clamp history length to drawn width.
 - Color downgrade: truecolor → 256 → 16‑color; themes must provide fallbacks.
@@ -31,12 +33,16 @@ This document summarizes the major components and data flow in DTOP, aligned wit
 ### Rendering components (`internal/ui`)
 - `graph.go`: braille sparkline renderer (`RenderGraph`) using Unicode braille (U+2800–U+28FF). Each cell encodes a 2×4 dot grid. Supports configurable min/max scale, fill vs line mode, and per-graph lipgloss styling.
 - `meter.go`: percentage bar renderer using Unicode block elements (█░). `RenderMeter` for full bars (label + [bar] + pct) and `RenderMiniMeter` for compact bars without brackets. Both accept `MeterOpts` with fill/empty styles.
-- `layout.go`: height/width splitting, grid column distribution, flow column computation.
+- `layout.go`: height/width splitting, grid column distribution, flow column computation, `SizeHint`-based reactive allocation (`AllocateHeights`).
+- `dialog.go`: generic bordered dialog overlay (`RenderDialog`) with title, body, and optional action buttons. `PlaceOverlay` centers content in the viewport via `lipgloss.Place`.
+- `menu.go`: scrollable vertical menu (`MenuState`, `RenderMenu`) with cursor prefix, clamped selection, and offset-based scroll window.
 
 ### Global interaction (`internal/app/model.go`)
 - Header shows app name, uptime, current update interval, and keybinding hints.
-- `q` / Ctrl+C quits; `1`–`4` toggle CPU/Memory/Network/Process boxes; `+`/`-` adjust update interval; `?`/`h` toggle help overlay.
+- `q` / Ctrl+C quits; `1`–`4` toggle CPU/Memory/Network/Process boxes; `+`/`-` adjust update interval; `?`/`h` toggle help overlay; `t` opens theme picker.
+- Mouse SGR support enabled (`tea.WithMouseCellMotion()`); `tea.MouseMsg` delegated to plugins (e.g. process list wheel scroll ±3 rows).
 - Box visibility tracked in `hiddenBoxes` map; rendering filters to visible plugins before layout.
+- Theme picker: `openThemePicker()` scans `~/.config/dtop/themes/` for `.toml` files; `applySelectedTheme()` loads and applies the chosen theme live.
 
 ## Plugin system
 - `internal/plugin` defines plugin interface, registry, config validation, and shutdown fan‑out.
@@ -48,6 +54,7 @@ This document summarizes the major components and data flow in DTOP, aligned wit
 - Config is TOML loaded from the user config directory (`dtop.conf`, legacy `dtop.toml` fallback).
 - Themes: built‑in default or TOML in `~/.config/dtop/themes/<name>.toml`; downgrade path must be honored (truecolor → 256 → 16).
 - Theme schema: see `docs/theme-schema.md`; ensure all graph/box colors have fallbacks.
+- Runtime terminal capability detection applies color profile fallback (truecolor/256/16) and UTF-8 awareness for ASCII-safe rendering.
 
 ## Error handling and fallbacks
 - Missing capabilities (temps, watts, GPU libs) → mark values “N/A”, log once at INFO then DEBUG.

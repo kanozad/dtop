@@ -49,6 +49,15 @@ func TestValidateConfigEmpty(t *testing.T) {
 	}
 }
 
+func TestValidateConfigAllowsGlobalIntervalKey(t *testing.T) {
+	t.Parallel()
+
+	cfg := map[string]any{GlobalPluginIntervalKey: "1s"}
+	if err := ValidateConfig("demo", cfg); err != nil {
+		t.Fatalf("expected interval key to be accepted, got %v", err)
+	}
+}
+
 func TestShutdownAllJoinsErrors(t *testing.T) {
 	t.Parallel()
 

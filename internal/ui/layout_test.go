@@ -2,50 +2,6 @@ package ui
 
 import "testing"
 
-func TestSplitHeightsTooSmall(t *testing.T) {
-	t.Parallel()
-
-	got := SplitHeights(5, 3, 2)
-	want := []int{2, 2, 1}
-	if len(got) != len(want) {
-		t.Fatalf("len=%d want %d", len(got), len(want))
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("index %d: got %d want %d", i, got[i], want[i])
-		}
-	}
-}
-
-func TestSplitHeightsWithMinimum(t *testing.T) {
-	t.Parallel()
-
-	got := SplitHeights(10, 3, 2)
-	want := []int{4, 3, 3}
-	if len(got) != len(want) {
-		t.Fatalf("len=%d want %d", len(got), len(want))
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("index %d: got %d want %d", i, got[i], want[i])
-		}
-	}
-}
-
-func TestSplitHeightsEdgeCases(t *testing.T) {
-	t.Parallel()
-
-	if got := SplitHeights(0, 3, 1); got != nil {
-		t.Fatalf("expected nil for zero total, got %v", got)
-	}
-	if got := SplitHeights(10, 0, 1); got != nil {
-		t.Fatalf("expected nil for zero count, got %v", got)
-	}
-	if got := SplitHeights(3, 3, 0); len(got) != 3 {
-		t.Fatalf("expected 3 entries, got %v", got)
-	}
-}
-
 func TestSplitWidths(t *testing.T) {
 	t.Parallel()
 
@@ -123,6 +79,147 @@ func TestGridColumns(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func assertInts(t *testing.T, label string, got, want []int) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("%s: len=%d want %d; got %v", label, len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("%s: index %d: got %d want %d (full: %v)", label, i, got[i], want[i], got)
+		}
+	}
+}
+
+func sumInts(xs []int) int {
+	s := 0
+	for _, x := range xs {
+		s += x
+	}
+	return s
+}
+
+func TestAllocateHeightsEqualWeight(t *testing.T) {
+	t.Parallel()
+	hints := []SizeHint{
+		{MinH: 3, Weight: 1},
+		{MinH: 3, Weight: 1},
+		{MinH: 3, Weight: 1},
+	}
+	got := AllocateHeights(hints, 30)
+	assertInts(t, "equal", got, []int{10, 10, 10})
+}
+
+func TestAllocateHeightsMixedWeight(t *testing.T) {
+	t.Parallel()
+	// Process (w4) + battery (w1, max3) + cpu (w3)
+	hints := []SizeHint{
+		{MinH: 5, MaxH: 0, Weight: 4}, // process
+		{MinH: 2, MaxH: 3, Weight: 1}, // battery
+		{MinH: 3, MaxH: 0, Weight: 3}, // cpu
+	}
+	total := 40
+	got := AllocateHeights(hints, total)
+	if sumInts(got) != total {
+		t.Fatalf("sum=%d want %d; alloc=%v", sumInts(got), total, got)
+	}
+	// Battery should be capped at 3.
+	if got[1] != 3 {
+		t.Fatalf("battery got %d want 3 (capped)", got[1])
+	}
+	// Process should get more than CPU (weight 4 vs 3).
+	if got[0] <= got[2] {
+		t.Fatalf("process (%d) should exceed cpu (%d)", got[0], got[2])
+	}
+}
+
+func TestAllocateHeightsAllCapped(t *testing.T) {
+	t.Parallel()
+	hints := []SizeHint{
+		{MinH: 2, MaxH: 5, Weight: 1},
+		{MinH: 2, MaxH: 5, Weight: 1},
+	}
+	got := AllocateHeights(hints, 100)
+	assertInts(t, "all-capped", got, []int{5, 5})
+}
+
+func TestAllocateHeightsUndersized(t *testing.T) {
+	t.Parallel()
+	hints := []SizeHint{
+		{MinH: 5, Weight: 1},
+		{MinH: 5, Weight: 1},
+	}
+	got := AllocateHeights(hints, 6)
+	if sumInts(got) != 6 {
+		t.Fatalf("sum=%d want 6; alloc=%v", sumInts(got), got)
+	}
+}
+
+func TestAllocateHeightsSinglePlugin(t *testing.T) {
+	t.Parallel()
+	hints := []SizeHint{{MinH: 3, MaxH: 0, Weight: 1}}
+	got := AllocateHeights(hints, 50)
+	assertInts(t, "single", got, []int{50})
+}
+
+func TestAllocateHeightsSinglePluginCapped(t *testing.T) {
+	t.Parallel()
+	hints := []SizeHint{{MinH: 3, MaxH: 10, Weight: 1}}
+	got := AllocateHeights(hints, 50)
+	assertInts(t, "single-capped", got, []int{10})
+}
+
+func TestAllocateHeightsZeroWeight(t *testing.T) {
+	t.Parallel()
+	// Clock (w0, max1) should only get its min, all surplus goes to cpu.
+	hints := []SizeHint{
+		{MinH: 1, MaxH: 1, Weight: 0}, // clock
+		{MinH: 3, MaxH: 0, Weight: 3}, // cpu
+	}
+	got := AllocateHeights(hints, 30)
+	assertInts(t, "zero-weight", got, []int{1, 29})
+}
+
+func TestAllocateHeightsEdgeCases(t *testing.T) {
+	t.Parallel()
+	if got := AllocateHeights(nil, 10); got != nil {
+		t.Fatalf("nil hints: expected nil, got %v", got)
+	}
+	if got := AllocateHeights([]SizeHint{{MinH: 3, Weight: 1}}, 0); got != nil {
+		t.Fatalf("zero total: expected nil, got %v", got)
+	}
+}
+
+func TestAllocateHeightsBatteryScenario(t *testing.T) {
+	t.Parallel()
+	// Realistic scenario: cpu + memory + network + process + battery
+	hints := []SizeHint{
+		{MinH: 3, PrefH: 12, MaxH: 0, Weight: 3}, // cpu
+		{MinH: 3, PrefH: 8, MaxH: 0, Weight: 2},  // memory
+		{MinH: 3, PrefH: 8, MaxH: 0, Weight: 2},  // network
+		{MinH: 5, PrefH: 20, MaxH: 0, Weight: 4}, // process
+		{MinH: 2, PrefH: 3, MaxH: 3, Weight: 1},  // battery
+	}
+	total := 60
+	got := AllocateHeights(hints, total)
+	if sumInts(got) != total {
+		t.Fatalf("sum=%d want %d; alloc=%v", sumInts(got), total, got)
+	}
+	// Battery capped at 3.
+	if got[4] != 3 {
+		t.Fatalf("battery got %d want 3", got[4])
+	}
+	// Process (weight 4) should be largest.
+	for i := 0; i < 4; i++ {
+		if i == 3 {
+			continue
+		}
+		if got[3] <= got[i] {
+			t.Fatalf("process (%d) should exceed plugin %d (%d)", got[3], i, got[i])
+		}
 	}
 }
 
