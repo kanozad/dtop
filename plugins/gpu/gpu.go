@@ -31,7 +31,7 @@ func New() *GPU {
 func (g *GPU) ID() plugin.ID { return "gpu" }
 func (g *GPU) Name() string  { return "GPU" }
 func (g *GPU) SizeHint() ui.SizeHint {
-	return ui.SizeHint{MinH: 4, PrefH: 6, MaxH: 0, Weight: 1}
+	return ui.SizeHint{MinH: 4, PrefH: 6, MaxH: 6, Weight: 1}
 }
 func (g *GPU) AllowedConfigKeys() []string {
 	return []string{"show_encoder", "show_pcie"}

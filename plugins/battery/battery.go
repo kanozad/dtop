@@ -24,9 +24,9 @@ func New() *Battery {
 	return &Battery{}
 }
 
-func (b *Battery) ID() plugin.ID                    { return "battery" }
-func (b *Battery) Name() string                     { return "Battery" }
-func (b *Battery) AllowedConfigKeys() []string       { return nil }
+func (b *Battery) ID() plugin.ID               { return "battery" }
+func (b *Battery) Name() string                { return "Battery" }
+func (b *Battery) AllowedConfigKeys() []string { return nil }
 func (b *Battery) SizeHint() ui.SizeHint {
 	return ui.SizeHint{MinH: 3, PrefH: 3, MaxH: 3, Weight: 2}
 }

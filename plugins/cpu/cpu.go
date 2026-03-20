@@ -125,7 +125,11 @@ func (c *CPU) renderMainMeter(stats *types.CPUStats, width int, opts ui.MeterOpt
 }
 
 func (c *CPU) renderHistoryGraph(stats *types.CPUStats, width, height int, th theme.Theme) string {
-	graphHeight := graphRows(height)
+	coreBars := 0
+	if c.cfg.PerCore {
+		coreBars = coreBarCount(stats.PerCore)
+	}
+	graphHeight := graphRows(height, coreBars)
 	if graphHeight > 0 && len(stats.TotalHistory) > 0 {
 		return ui.RenderGraph(stats.TotalHistory, width, graphHeight, ui.GraphOpts{
 			Min: 0, Max: 100, Style: th.GraphCPU, Fill: true, ASCII: !th.UTF8,
@@ -159,11 +163,13 @@ func (c *CPU) renderSummaryLine(stats *types.CPUStats, width int, th theme.Theme
 	return th.Muted.Render(ui.Truncate(summary, width))
 }
 
-// graphRows computes how many braille rows to allocate for the graph based on
-// the total box inner height. Returns 0 if there's not enough room.
-func graphRows(boxHeight int) int {
-	// Reserve: title+border (2) + meter (1) + summary (1) + padding (2) = ~6 lines overhead.
-	inner := boxHeight - 6
+// graphRows computes how many braille rows to allocate for the graph.
+// h is the inner content height (rows) passed to View.
+// coreBarRows is the number of per-core bar rows that will be rendered below the graph.
+// Returns 0 if there is not enough room.
+func graphRows(h, coreBarRows int) int {
+	// Inner content: title(1) + meter(1) + summary(1) + coreBarRows + graphRows = 3 + coreBarRows + graphRows.
+	inner := h - 3 - coreBarRows
 	if inner < 1 {
 		return 0
 	}
@@ -172,6 +178,19 @@ func graphRows(boxHeight int) int {
 		inner = 6
 	}
 	return inner
+}
+
+// coreBarCount returns the number of rendered rows needed for per-core bars.
+// Cores are displayed in a single column up to 4 cores, two columns above that.
+func coreBarCount(cores []float64) int {
+	n := len(cores)
+	if n == 0 {
+		return 0
+	}
+	if n <= 4 {
+		return n
+	}
+	return (n + 1) / 2
 }
 
 // renderCoreBars renders per-core mini meters, using 2 columns if there are

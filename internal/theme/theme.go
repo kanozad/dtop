@@ -181,21 +181,25 @@ func (t Theme) RenderBox(title, body string, width, height int) string {
 		content = t.BoxTitle.Render(title) + "\n" + content
 	}
 
+	vChrome, _ := t.BoxChrome()
 	box := t.Box
 	if width > 0 {
-		box = box.Width(width)
+		// width is the outer box width. Width() in lipgloss sets the content area including
+		// padding but not borders. So subtract only the border widths to get outer = width.
+		borderH := box.GetBorderLeftSize() + box.GetBorderRightSize()
+		cw := width - borderH
+		if cw < 1 {
+			cw = 1
+		}
+		box = box.Width(cw)
 	}
 	if height > 0 {
-		box = box.Height(height).MaxHeight(height)
-		// Strictly enforce height by truncating content that exceeds the inner budget.
-		vChrome, _ := t.BoxChrome()
-		innerH := height - vChrome
-		if innerH < 0 {
-			innerH = 0
-		}
+		// height is inner content rows; outer = height + vChrome. Cap outer at that value
+		// without forcing Height() padding, so the bottom border is never clipped.
+		box = box.MaxHeight(height + vChrome)
 		lines := strings.Split(content, "\n")
-		if len(lines) > innerH {
-			content = strings.Join(lines[:innerH], "\n")
+		if len(lines) > height {
+			content = strings.Join(lines[:height], "\n")
 		}
 	}
 	return box.Render(content)

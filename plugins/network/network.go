@@ -94,8 +94,13 @@ func (n *Network) View(data collector.Data, width, height int, th theme.Theme) s
 	// Upload section
 	lines = append(lines, n.renderUploadSection(&stats, innerWidth, graphH, th)...)
 
-	// Footer: IPs + totals
-	lines = append(lines, n.renderFooter(&stats, innerWidth, th)...)
+	// Footer: IPs + totals – only rendered when there is inner height budget beyond the
+	// main sections. Inner content = height (content rows). Main sections use
+	// title(1) + header(1) + down(1+graphH) + up(1+graphH) = 4+2*graphH lines.
+	availableForFooter := height - 4 - 2*graphH
+	if availableForFooter > 0 {
+		lines = append(lines, n.renderFooter(&stats, innerWidth, availableForFooter, th)...)
+	}
 
 	body := strings.Join(lines, "\n")
 	return th.RenderBox("Network", body, width, height)
@@ -163,8 +168,7 @@ func (n *Network) renderUploadSection(stats *types.NetworkStats, width, height i
 	return lines
 }
 
-func (n *Network) renderFooter(stats *types.NetworkStats, width int, th theme.Theme) []string {
-	var lines []string
+func (n *Network) renderFooter(stats *types.NetworkStats, width, maxLines int, th theme.Theme) []string {
 	var footer []string
 	if len(stats.IPv4) > 0 {
 		footer = append(footer, "IPv4: "+strings.Join(stats.IPv4, ", "))
@@ -184,15 +188,20 @@ func (n *Network) renderFooter(stats *types.NetworkStats, width int, th theme.Th
 		totalUpPrefix,
 		formatBytes(float64(stats.TxBytes), false)))
 
-	for _, f := range footer {
+	var lines []string
+	for i, f := range footer {
+		if i >= maxLines {
+			break
+		}
 		lines = append(lines, th.Muted.Render(ui.Truncate(f, width)))
 	}
 	return lines
 }
 
-func netGraphRows(boxHeight int) int {
-	// Two graphs + labels + footer need space. Reserve ~10 lines overhead.
-	inner := (boxHeight - 10) / 2
+func netGraphRows(h int) int {
+	// Inner content: title(1) + header(1) + down label(1) + up label(1) + 2*graphRows = 4 + 2*graphRows.
+	// Remaining height is split equally between the two graphs.
+	inner := (h - 4) / 2
 	if inner < 1 {
 		return 0
 	}

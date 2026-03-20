@@ -32,7 +32,7 @@ func TestViewWithBattery(t *testing.T) {
 		Capacity:      60,
 		Status:        "Discharging",
 		PowerNowWatts: &pw,
-		EnergyNowWh:  &enow,
+		EnergyNowWh:   &enow,
 		EnergyFullWh:  &efull,
 		TimeToEmpty:   &tte,
 	}

@@ -91,32 +91,34 @@ func TestRenderBoxHeightEnforcement(t *testing.T) {
 	th := Default()
 	vChrome, _ := th.BoxChrome()
 
+	// height is inner content rows (not outer box height).
+	// Outer box height = height + vChrome.
 	tests := []struct {
 		name   string
 		title  string
 		body   string
-		height int
+		height int // inner content rows
 	}{
 		{
 			name:   "single line body fits",
 			body:   "line 1",
-			height: vChrome + 1,
+			height: 1,
 		},
 		{
 			name:   "multi line body truncated",
 			body:   "line 1\nline 2\nline 3",
-			height: vChrome + 1,
+			height: 1,
 		},
 		{
 			name:   "title + body truncated",
 			title:  "Title",
 			body:   "line 1\nline 2",
-			height: vChrome + 1, // title + border = vChrome + 1
+			height: 1, // only the title fits; body is truncated
 		},
 		{
 			name:   "zero height budget",
 			body:   "something",
-			height: vChrome - 1,
+			height: 0, // no height constraint applied
 		},
 	}
 
@@ -124,8 +126,12 @@ func TestRenderBoxHeightEnforcement(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := th.RenderBox(tt.title, tt.body, 20, tt.height)
 			lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
-			if tt.height > 0 && len(lines) > tt.height {
-				t.Errorf("RenderBox() output %d lines, want <= %d", len(lines), tt.height)
+			// Outer box = content rows + chrome. When height > 0, content is capped at height rows.
+			if tt.height > 0 {
+				want := tt.height + vChrome
+				if len(lines) > want {
+					t.Errorf("RenderBox() output %d lines, want <= %d", len(lines), want)
+				}
 			}
 		})
 	}
