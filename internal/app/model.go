@@ -203,6 +203,7 @@ func (m *Model) applyReloadedConfig(nextCfg config.Config) {
 	m.cfg.LiveReload = nextCfg.LiveReload
 	m.cfg.Presets = nextCfg.Presets
 	m.cfg.Plugins.Config = nextCfg.Plugins.Config
+	m.refreshPluginSchedules(m.now())
 
 	utf8 := m.theme.UTF8
 	if nextCfg.Theme.Name == "" || nextCfg.Theme.Name == m.cfg.Theme.Name {
@@ -906,6 +907,114 @@ func (m Model) renderPlugins(width, height int) string {
 	return result
 }
 
+// pluginColumnPref returns the 0-based column index a plugin requests via the
+// "column" config key (1-based in TOML). Returns -1 if no preference is set.
+func (m Model) pluginColumnPref(id plugin.ID) int {
+	if m.cfg.Plugins.Config == nil {
+		return -1
+	}
+	cfgByID, ok := m.cfg.Plugins.Config[string(id)]
+	if !ok || cfgByID == nil {
+		return -1
+	}
+	raw, ok := cfgByID[plugin.GlobalPluginColumnKey]
+	if !ok {
+		return -1
+	}
+	var col int
+	switch v := raw.(type) {
+	case int64:
+		col = int(v)
+	case int:
+		col = v
+	case float64:
+		col = int(v)
+	default:
+		return -1
+	}
+	return col - 1 // convert 1-based (config) to 0-based (internal)
+}
+
+// groupPluginsByColumn distributes plugins into numCols columns. Plugins with
+// a column preference are placed first; remaining plugins are distributed
+// evenly in declaration order, matching the existing left-heavy GridColumns
+// allocation so that the no-pinning case is identical to the prior behaviour.
+func (m Model) groupPluginsByColumn(plugins []plugin.Plugin, numCols int) [][]plugin.Plugin {
+	columns := make([][]plugin.Plugin, numCols)
+	var unpinned []plugin.Plugin
+	for _, p := range plugins {
+		col := m.pluginColumnPref(p.ID())
+		if col >= 0 && col < numCols {
+			columns[col] = append(columns[col], p)
+		} else {
+			unpinned = append(unpinned, p)
+		}
+	}
+	if len(unpinned) == 0 {
+		return columns
+	}
+	sizes := ui.GridColumns(len(unpinned), numCols)
+	idx := 0
+	for c, size := range sizes {
+		columns[c] = append(columns[c], unpinned[idx:idx+size]...)
+		idx += size
+	}
+	return columns
+}
+
+// activeColumnCount returns the effective number of columns for the current
+// layout mode and terminal dimensions. Used both for rendering and for sizing
+// history buffers correctly in multi-column layouts.
+func (m Model) activeColumnCount(visible []plugin.Plugin) int {
+	if len(visible) <= 1 {
+		return 1
+	}
+	switch m.cfg.Layout.Mode {
+	case "grid":
+		cols := m.cfg.Layout.Columns
+		if cols < 1 {
+			cols = 1
+		}
+		if cols > len(visible) {
+			cols = len(visible)
+		}
+		return cols
+	case "flow":
+		vChrome, _ := m.theme.BoxChrome()
+		hints := collectHints(visible)
+		minH := hints[0].MinH
+		for _, h := range hints {
+			if h.MinH < minH {
+				minH = h.MinH
+			}
+		}
+		if cols := ui.FlowColumns(len(visible), m.height, minH+vChrome); cols > 0 {
+			return cols
+		}
+	}
+	return 1
+}
+
+// pluginContentWidth returns the correct content width for a plugin's history
+// buffer, accounting for multi-column layouts where each column is narrower
+// than the full terminal width.
+func (m Model) pluginContentWidth(id plugin.ID) int {
+	visible := m.visiblePlugins()
+	numCols := m.activeColumnCount(visible)
+	if numCols <= 1 {
+		return ui.ContentWidth(m.width)
+	}
+	colWidths := ui.SplitWidths(m.width, numCols)
+	for col, colPlugins := range m.groupPluginsByColumn(visible, numCols) {
+		for _, p := range colPlugins {
+			if p.ID() == id {
+				return ui.ContentWidth(colWidths[col])
+			}
+		}
+	}
+	return ui.ContentWidth(m.width)
+}
+
 func sizeHintForPlugin(p plugin.Plugin) ui.SizeHint {
 	if sh, ok := p.(plugin.SizeHinter); ok {
 		return sh.SizeHint()
@@ -962,18 +1071,15 @@ func (m Model) renderPluginsGrid(plugins []plugin.Plugin, width, height int, num
 		numCols = len(plugins)
 	}
 
-	// Distribute plugins across columns
-	colSizes := ui.GridColumns(len(plugins), numCols)
 	colWidths := ui.SplitWidths(width, numCols)
+	columns := m.groupPluginsByColumn(plugins, numCols)
 
 	// Render each column
 	colViews := make([]string, numCols)
 	hidden := 0
-	idx := 0
 	for col := 0; col < numCols; col++ {
-		count := colSizes[col]
-		colPlugins := plugins[idx : idx+count]
-		idx += count
+		colPlugins := columns[col]
+		count := len(colPlugins)
 
 		// Subtract border overhead per box in this column.
 		contentBudget := height - vChrome*count
@@ -1024,7 +1130,7 @@ func (m Model) updatePlugin(id plugin.ID, msg tea.Msg) tea.Cmd {
 		if p.ID() == id {
 			if collectMsg, ok := msg.(pluginCollectMsg); ok {
 				if ha, ok := p.(plugin.HistoryAware); ok {
-					m.data[id] = ha.UpdateHistory(m.history, collectMsg.data, ui.ContentWidth(m.width))
+					m.data[id] = ha.UpdateHistory(m.history, collectMsg.data, m.pluginContentWidth(id))
 				}
 			}
 			return p.Update(msg)

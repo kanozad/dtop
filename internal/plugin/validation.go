@@ -17,6 +17,10 @@ const (
 	// GlobalPluginIntervalKey is a reserved plugin config key supported by the
 	// app scheduler for per-plugin collection cadence overrides.
 	GlobalPluginIntervalKey = "interval"
+
+	// GlobalPluginColumnKey is a reserved plugin config key that pins a plugin
+	// to a specific column (1-based) in grid and flow layouts.
+	GlobalPluginColumnKey = "column"
 )
 
 // ValidateConfig checks for unknown keys in cfg.
@@ -29,6 +33,7 @@ func ValidateConfig(id ID, cfg map[string]any, allowedKeys ...string) error {
 		allowed[key] = struct{}{}
 	}
 	allowed[GlobalPluginIntervalKey] = struct{}{}
+	allowed[GlobalPluginColumnKey] = struct{}{}
 	unknown := make([]string, 0, len(cfg))
 	for key := range cfg {
 		if _, ok := allowed[key]; !ok {

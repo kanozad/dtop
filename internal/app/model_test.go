@@ -14,6 +14,7 @@ import (
 	"mld.com/dtop/internal/config"
 	"mld.com/dtop/internal/plugin"
 	"mld.com/dtop/internal/theme"
+	"mld.com/dtop/internal/ui"
 	"mld.com/dtop/pkg/collector"
 )
 
@@ -456,4 +457,132 @@ func TestModelPresetImportFromKeyWorkflow(t *testing.T) {
 	if !strings.Contains(string(b), "[presets.6]") {
 		t.Fatalf("expected imported preset persisted to config")
 	}
+}
+
+// Fix 3: per-plugin interval changes in the config file must take effect after
+// applyReloadedConfig, without requiring a resize or restart.
+func TestModelApplyReloadedConfigRefreshesIntervals(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Default()
+	cfg.UpdateInterval = config.Duration{Duration: 2 * time.Second}
+	p := &collectCountingPlugin{id: "cpu", name: "CPU"}
+	m := NewModel(context.Background(), nil, cfg, theme.Default(), []plugin.Plugin{p}, "")
+
+	if got := m.pluginIntervals[p.ID()]; got != 2*time.Second {
+		t.Fatalf("expected initial interval 2s, got %v", got)
+	}
+
+	nextCfg := config.Default()
+	nextCfg.UpdateInterval = config.Duration{Duration: 2 * time.Second}
+	nextCfg.Plugins.Config = map[string]map[string]any{
+		"cpu": {plugin.GlobalPluginIntervalKey: "500ms"},
+	}
+	m.applyReloadedConfig(nextCfg)
+
+	if got := m.pluginIntervals[p.ID()]; got != 500*time.Millisecond {
+		t.Fatalf("expected refreshed interval 500ms after reload, got %v", got)
+	}
+}
+
+// Fix 2: a plugin with column = 2 in its config must land in the second column
+// (0-based index 1) when groupPluginsByColumn is called.
+func TestModelGroupPluginsByColumnPinning(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Default()
+	cfg.Layout.Mode = "grid"
+	cfg.Layout.Columns = 2
+	cfg.Plugins.Config = map[string]map[string]any{
+		"process": {plugin.GlobalPluginColumnKey: int64(2)},
+	}
+	plugins := []plugin.Plugin{
+		&modelPlugin{id: "cpu", name: "CPU"},
+		&modelPlugin{id: "memory", name: "Memory"},
+		&modelPlugin{id: "process", name: "Process"},
+	}
+	m := NewModel(context.Background(), nil, cfg, theme.Default(), plugins, "")
+
+	columns := m.groupPluginsByColumn(plugins, 2)
+	if len(columns) != 2 {
+		t.Fatalf("expected 2 columns, got %d", len(columns))
+	}
+
+	var processInCol1 bool
+	for _, p := range columns[1] {
+		if p.ID() == "process" {
+			processInCol1 = true
+		}
+	}
+	if !processInCol1 {
+		t.Fatalf("expected 'process' pinned to column index 1; col0=%v col1=%v",
+			pluginIDs(columns[0]), pluginIDs(columns[1]))
+	}
+}
+
+// Fix 2: without any pinning, groupPluginsByColumn must produce the same
+// distribution as the original GridColumns-based approach.
+func TestModelGroupPluginsByColumnNoPinningMatchesGridColumns(t *testing.T) {
+	t.Parallel()
+
+	plugins := []plugin.Plugin{
+		&modelPlugin{id: "a"}, &modelPlugin{id: "b"}, &modelPlugin{id: "c"},
+		&modelPlugin{id: "d"}, &modelPlugin{id: "e"},
+	}
+	m := NewModel(context.Background(), nil, config.Default(), theme.Default(), plugins, "")
+
+	columns := m.groupPluginsByColumn(plugins, 2)
+	sizes := ui.GridColumns(len(plugins), 2) // expected: [3, 2]
+
+	for col, want := range sizes {
+		if got := len(columns[col]); got != want {
+			t.Errorf("col %d: got %d plugins, want %d", col, got, want)
+		}
+	}
+	// Verify declaration order is preserved within each column.
+	if columns[0][0].ID() != "a" || columns[0][1].ID() != "b" || columns[0][2].ID() != "c" {
+		t.Errorf("unexpected col0 order: %v", pluginIDs(columns[0]))
+	}
+	if columns[1][0].ID() != "d" || columns[1][1].ID() != "e" {
+		t.Errorf("unexpected col1 order: %v", pluginIDs(columns[1]))
+	}
+}
+
+// Fix 1: in a 2-column grid layout, pluginContentWidth must return a width
+// narrower than the full terminal width, not ui.ContentWidth(m.width).
+func TestModelPluginContentWidthInGridLayout(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Default()
+	cfg.Layout.Mode = "grid"
+	cfg.Layout.Columns = 2
+	plugins := []plugin.Plugin{
+		&modelPlugin{id: "a", name: "A"},
+		&modelPlugin{id: "b", name: "B"},
+	}
+	m := NewModel(context.Background(), nil, cfg, theme.Default(), plugins, "")
+	m.width = 80
+	m.height = 30
+
+	fullWidth := ui.ContentWidth(m.width) // 78 (80 - 2 border)
+	wA := m.pluginContentWidth("a")
+	wB := m.pluginContentWidth("b")
+
+	if wA >= fullWidth {
+		t.Errorf("pluginContentWidth(a) = %d, want < %d (full-width content)", wA, fullWidth)
+	}
+	if wB >= fullWidth {
+		t.Errorf("pluginContentWidth(b) = %d, want < %d (full-width content)", wB, fullWidth)
+	}
+	if wA != wB {
+		t.Errorf("both plugins are in equal-width columns: got %d and %d", wA, wB)
+	}
+}
+
+func pluginIDs(plugins []plugin.Plugin) []plugin.ID {
+	ids := make([]plugin.ID, len(plugins))
+	for i, p := range plugins {
+		ids[i] = p.ID()
+	}
+	return ids
 }
