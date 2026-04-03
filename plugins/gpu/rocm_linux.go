@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/ebitengine/purego"
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 // RSMI Constants

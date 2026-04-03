@@ -7,8 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"mld.com/dtop/internal/theme"
-	"mld.com/dtop/pkg/collector"
+	"github.com/kanozad/dtop/internal/theme"
+	"github.com/kanozad/dtop/pkg/collector"
 )
 
 type registryPlugin struct {

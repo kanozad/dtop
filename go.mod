@@ -1,4 +1,4 @@
-module mld.com/dtop
+module github.com/kanozad/dtop
 
 go 1.24.0
 

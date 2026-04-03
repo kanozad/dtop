@@ -5,7 +5,7 @@ package process
 import (
 	"testing"
 
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 func TestFilterProcesses(t *testing.T) {

@@ -11,12 +11,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"mld.com/dtop/internal/config"
-	"mld.com/dtop/internal/plugin"
-	"mld.com/dtop/internal/theme"
-	"mld.com/dtop/internal/ui"
-	"mld.com/dtop/pkg/collector"
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/internal/config"
+	"github.com/kanozad/dtop/internal/plugin"
+	"github.com/kanozad/dtop/internal/theme"
+	"github.com/kanozad/dtop/internal/ui"
+	"github.com/kanozad/dtop/pkg/collector"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 // Reserved plugin.ID keys used to surface non-plugin errors in pluginErrs.

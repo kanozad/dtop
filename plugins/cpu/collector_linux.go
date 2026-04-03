@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 func readCPUStats(prev map[string]cpuTimes, opts collectOpts) (types.CPUStats, map[string]cpuTimes, raplState, error) {

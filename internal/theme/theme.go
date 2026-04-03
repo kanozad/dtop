@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/pelletier/go-toml/v2"
 
-	"mld.com/dtop/internal/termcap"
+	"github.com/kanozad/dtop/internal/termcap"
 )
 
 var themeNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)

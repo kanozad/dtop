@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 func readBatteryStats() (types.BatteryStats, error) {

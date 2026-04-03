@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"mld.com/dtop/internal/termcap"
+	"github.com/kanozad/dtop/internal/termcap"
 )
 
 func writeThemeFile(t *testing.T, root, name, content string) {

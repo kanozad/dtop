@@ -2,7 +2,7 @@
 
 package gpu
 
-import "mld.com/dtop/pkg/types"
+import "github.com/kanozad/dtop/pkg/types"
 
 func readGPUStats() (types.GPUStats, error) {
 	return types.GPUStats{Error: "GPU monitoring not supported on this platform"}, nil

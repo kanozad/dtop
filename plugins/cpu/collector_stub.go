@@ -5,7 +5,7 @@ package cpu
 import (
 	"errors"
 
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 func readCPUStats(prev map[string]cpuTimes, _ collectOpts) (types.CPUStats, map[string]cpuTimes, raplState, error) {

@@ -2,7 +2,7 @@
 
 package battery
 
-import "mld.com/dtop/pkg/types"
+import "github.com/kanozad/dtop/pkg/types"
 
 func readBatteryStats() (types.BatteryStats, error) {
 	return types.BatteryStats{Present: false}, nil

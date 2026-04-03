@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 // readProcessStats collects process information from /proc on Linux.

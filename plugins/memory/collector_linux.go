@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 // readMemoryStats collects memory, swap, disk, and I/O statistics on Linux.

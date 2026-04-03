@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"mld.com/dtop/internal/testutil"
-	"mld.com/dtop/internal/theme"
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/internal/testutil"
+	"github.com/kanozad/dtop/internal/theme"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 func makeProcess(pid int, name string, cpu float64, memMB uint64) types.ProcessInfo {

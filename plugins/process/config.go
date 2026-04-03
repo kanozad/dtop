@@ -1,6 +1,6 @@
 package process
 
-import "mld.com/dtop/pkg/types"
+import "github.com/kanozad/dtop/pkg/types"
 
 // Config holds configuration options for the process plugin.
 type Config struct {

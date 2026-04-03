@@ -3,7 +3,7 @@ package collector
 import (
 	"context"
 
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 // Data represents collected monitor data.

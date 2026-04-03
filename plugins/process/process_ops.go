@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 // filterProcesses filters processes by name or command.

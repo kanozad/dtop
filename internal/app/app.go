@@ -7,10 +7,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"mld.com/dtop/internal/config"
-	"mld.com/dtop/internal/plugin"
-	"mld.com/dtop/internal/termcap"
-	"mld.com/dtop/internal/theme"
+	"github.com/kanozad/dtop/internal/config"
+	"github.com/kanozad/dtop/internal/plugin"
+	"github.com/kanozad/dtop/internal/termcap"
+	"github.com/kanozad/dtop/internal/theme"
 )
 
 func Run(ctx context.Context, cfg config.Config, plugins []plugin.Plugin, configPath string) error {

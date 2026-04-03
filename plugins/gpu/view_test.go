@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"mld.com/dtop/internal/theme"
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/internal/theme"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 func makeGPU() types.GPUInfo {

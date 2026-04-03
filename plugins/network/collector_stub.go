@@ -5,7 +5,7 @@ package network
 import (
 	"fmt"
 
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 // readNetworkStats returns an error on non-Linux platforms.

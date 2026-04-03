@@ -5,7 +5,7 @@ package memory
 import (
 	"fmt"
 
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 // readMemoryStats returns an error on non-Linux platforms.

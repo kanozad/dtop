@@ -5,7 +5,7 @@ package process
 import (
 	"fmt"
 
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 // readProcessStats is a stub for non-Linux platforms.

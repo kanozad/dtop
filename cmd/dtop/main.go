@@ -8,16 +8,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	"mld.com/dtop/internal/app"
-	"mld.com/dtop/internal/config"
-	"mld.com/dtop/internal/plugin"
-	"mld.com/dtop/plugins/battery"
-	"mld.com/dtop/plugins/clock"
-	"mld.com/dtop/plugins/cpu"
-	"mld.com/dtop/plugins/gpu"
-	"mld.com/dtop/plugins/memory"
-	"mld.com/dtop/plugins/network"
-	"mld.com/dtop/plugins/process"
+	"github.com/kanozad/dtop/internal/app"
+	"github.com/kanozad/dtop/internal/config"
+	"github.com/kanozad/dtop/internal/plugin"
+	"github.com/kanozad/dtop/plugins/battery"
+	"github.com/kanozad/dtop/plugins/clock"
+	"github.com/kanozad/dtop/plugins/cpu"
+	"github.com/kanozad/dtop/plugins/gpu"
+	"github.com/kanozad/dtop/plugins/memory"
+	"github.com/kanozad/dtop/plugins/network"
+	"github.com/kanozad/dtop/plugins/process"
 )
 
 // Version is set at build time via -ldflags.

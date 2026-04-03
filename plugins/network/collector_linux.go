@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 func readNetworkStats(prev map[string]netDevCounters, cfg Config) (types.NetworkStats, map[string]netDevCounters, error) {

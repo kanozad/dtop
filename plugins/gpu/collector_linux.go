@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"mld.com/dtop/pkg/types"
+	"github.com/kanozad/dtop/pkg/types"
 )
 
 // readGPUStats probes for GPU devices via NVML (for NVIDIA) and /sys/class/drm
