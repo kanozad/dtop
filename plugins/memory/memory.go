@@ -223,13 +223,6 @@ func (m *Memory) UpdateHistory(h *types.HistoryStore, data collector.Data, width
 	return stats
 }
 
-func (m *Memory) targetWidth() int {
-	if m.lastWidth > 0 {
-		return m.lastWidth
-	}
-	return 80
-}
-
 func formatBytes(bytes uint64, base10 bool) string {
 	if base10 {
 		// Base-10: KB, MB, GB

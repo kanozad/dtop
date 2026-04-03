@@ -241,10 +241,3 @@ func (c *CPU) UpdateHistory(h *types.HistoryStore, data collector.Data, width in
 
 	return stats
 }
-
-func (c *CPU) targetWidth() int {
-	if c.lastWidth > 0 {
-		return c.lastWidth
-	}
-	return 80
-}

@@ -1,6 +1,7 @@
 package battery
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -63,7 +64,7 @@ func TestFormatDuration(t *testing.T) {
 func TestCollectReturnsStats(t *testing.T) {
 	t.Parallel()
 	b := New()
-	data, err := b.Collect(nil)
+	data, err := b.Collect(context.Background())
 	if err != nil {
 		t.Fatalf("Collect: %v", err)
 	}

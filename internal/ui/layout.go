@@ -192,40 +192,6 @@ func capFor(h SizeHint) int {
 	return 0
 }
 
-// splitProportional handles the under-budget case: divide totalHeight across
-// plugins proportionally to their MinH (so larger-minimum plugins still get
-// relatively more).
-func splitProportional(hints []SizeHint, total int) []int {
-	n := len(hints)
-	alloc := make([]int, n)
-	minSum := 0
-	for _, h := range hints {
-		minSum += h.MinH
-	}
-	if minSum == 0 {
-		base := total / n
-		rem := total % n
-		for i := range alloc {
-			alloc[i] = base
-			if i < rem {
-				alloc[i]++
-			}
-		}
-		return alloc
-	}
-	assigned := 0
-	for i, h := range hints {
-		alloc[i] = total * h.MinH / minSum
-		assigned += alloc[i]
-	}
-	rem := total - assigned
-	for i := 0; rem > 0 && i < n; i++ {
-		alloc[i]++
-		rem--
-	}
-	return alloc
-}
-
 // FlowColumns computes the number of columns needed to fit count items into a
 // height budget with a minimum per-item height. It favors more columns when
 // height is constrained to avoid vertical overflow.

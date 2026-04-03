@@ -226,13 +226,6 @@ func (n *Network) UpdateHistory(h *types.HistoryStore, data collector.Data, widt
 	return stats
 }
 
-func (n *Network) targetWidth() int {
-	if n.lastWidth > 0 {
-		return n.lastWidth
-	}
-	return 80
-}
-
 func autoScale(hist []float64, floor float64) float64 {
 	maxVal := floor
 	for _, v := range hist {

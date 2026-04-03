@@ -27,7 +27,7 @@ func (d *Duration) UnmarshalText(text []byte) error {
 }
 
 func (d Duration) MarshalText() ([]byte, error) {
-	return []byte(d.Duration.String()), nil
+	return []byte(d.String()), nil
 }
 
 type ThemeConfig struct {

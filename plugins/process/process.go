@@ -120,10 +120,10 @@ func (p *Process) Shutdown(context.Context) error {
 func (p *Process) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
-		switch msg.Type {
-		case tea.MouseWheelUp:
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
 			p.moveSelection(-3)
-		case tea.MouseWheelDown:
+		case tea.MouseButtonWheelDown:
 			p.moveSelection(3)
 		}
 		return nil

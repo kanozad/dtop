@@ -505,7 +505,7 @@ func (m Model) View() string {
 
 	uptime := time.Since(m.startTime).Truncate(time.Second)
 	headerLeft := m.theme.Header.Render("DTOP")
-	headerText := fmt.Sprintf("up %s  interval %s", uptime, m.cfg.UpdateInterval.Duration.Truncate(time.Millisecond))
+	headerText := fmt.Sprintf("up %s  interval %s", uptime, m.cfg.UpdateInterval.Truncate(time.Millisecond))
 	if m.cfg.LiveReload {
 		headerText += "  reload:on"
 	}
