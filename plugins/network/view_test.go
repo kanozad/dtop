@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"mld.com/dtop/internal/testutil"
 	"mld.com/dtop/internal/theme"
 	"mld.com/dtop/pkg/types"
 )
@@ -118,4 +119,43 @@ func TestNetworkViewFooterLineCap(t *testing.T) {
 	if strings.Contains(out, "IPv6") {
 		t.Errorf("IPv6 should be suppressed at h=7 (only 1 footer line fits)")
 	}
+}
+
+// Golden-file tests: capture full rendered output (ANSI stripped) and compare
+// against stored fixtures in testdata/. Re-generate with: go test -run 'Golden' -update
+
+func makeNetStats() types.NetworkStats {
+	return types.NetworkStats{
+		Interface:     "eth0",
+		LinkUp:        true,
+		IPv4:          []string{"192.168.1.100"},
+		IPv6:          []string{"fe80::1"},
+		RxBytesPerSec: 1024 * 1024,
+		TxBytesPerSec: 512 * 1024,
+		RxBytes:       100 * 1024 * 1024,
+		TxBytes:       50 * 1024 * 1024,
+	}
+}
+
+func TestNetworkGoldenMinHeight(t *testing.T) {
+	n := New()
+	th := theme.Default()
+	out := n.View(makeNetStats(), 80, n.SizeHint().MinH, th)
+	testutil.CheckGolden(t, "net_min_height", out)
+}
+
+func TestNetworkGoldenWithFooter(t *testing.T) {
+	n := New()
+	th := theme.Default()
+	// At h=14: graph capped at 4, availableForFooter=2 → IPv4 + IPv6 fit; Total is cut.
+	out := n.View(makeNetStats(), 80, 14, th)
+	testutil.CheckGolden(t, "net_with_footer", out)
+}
+
+func TestNetworkGoldenPartialFooter(t *testing.T) {
+	n := New()
+	th := theme.Default()
+	// At h=7: footer gets 1 line (IPv4 only).
+	out := n.View(makeNetStats(), 80, 7, th)
+	testutil.CheckGolden(t, "net_partial_footer", out)
 }

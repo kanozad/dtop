@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"mld.com/dtop/internal/testutil"
 	"mld.com/dtop/internal/theme"
 	"mld.com/dtop/pkg/types"
 )
@@ -151,4 +152,55 @@ func TestCPUViewPrefHeight(t *testing.T) {
 	if !strings.Contains(out, "Load:") {
 		t.Errorf("expected summary line 'Load:' at PrefH, got: %q", out)
 	}
+}
+
+// Golden-file tests: capture full rendered output (ANSI stripped) and compare
+// against stored fixtures in testdata/. Re-generate with: go test -run 'Golden' -update
+
+func TestCPUGoldenMinHeight(t *testing.T) {
+	c := New()
+	c.cfg.PerCore = false
+	th := theme.Default()
+	stats := types.CPUStats{
+		Total:  42.5,
+		Load1:  1.00,
+		Load5:  0.75,
+		Load15: 0.50,
+	}
+	out := c.View(stats, 80, c.SizeHint().MinH, th)
+	testutil.CheckGolden(t, "cpu_min_height", out)
+}
+
+func TestCPUGoldenWithHistory(t *testing.T) {
+	c := New()
+	c.cfg.PerCore = false
+	th := theme.Default()
+	history := make([]float64, 60)
+	for i := range history {
+		history[i] = float64(i%50) * 2
+	}
+	stats := types.CPUStats{
+		Total:        75.0,
+		Load1:        2.00,
+		Load5:        1.50,
+		Load15:       1.00,
+		TotalHistory: history,
+	}
+	out := c.View(stats, 80, 12, th)
+	testutil.CheckGolden(t, "cpu_with_history", out)
+}
+
+func TestCPUGoldenWithPerCore(t *testing.T) {
+	c := New()
+	c.cfg.PerCore = true
+	th := theme.Default()
+	stats := types.CPUStats{
+		Total:   60.0,
+		Load1:   1.50,
+		Load5:   1.25,
+		Load15:  1.00,
+		PerCore: []float64{80.0, 40.0, 70.0, 30.0},
+	}
+	out := c.View(stats, 80, 12, th)
+	testutil.CheckGolden(t, "cpu_with_per_core", out)
 }

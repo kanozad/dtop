@@ -1,7 +1,9 @@
 # Example configuration for dtop
 # Default location: ~/.config/dtop/dtop.conf (legacy: dtop.toml)
 
-# How often collectors should refresh.
+# How often collectors should refresh. Accepts Go duration strings (e.g. "1s",
+# "500ms", "2m"). Per-plugin overrides are set with interval under each
+# [plugins.config.<id>] section below.
 update_interval = "2s"
 
 # Reload config changes on the fly when this file changes.
@@ -30,12 +32,13 @@ enabled = ["clock", "cpu", "memory", "network", "process"]
 
 [plugins.config.clock]
 # No options yet.
-# Optional per-plugin collection interval override.
+# interval overrides update_interval for this plugin only. Accepts any Go
+# duration string (e.g. "500ms", "1s", "5s"). The scheduler will not start a
+# new collection while the previous one is still running (non-overlapping).
 # interval = "1s"
 
 [plugins.config.cpu]
-# Optional per-plugin collection interval override.
-# interval = "1s"
+# interval = "1s"  — override update_interval for this plugin (non-overlapping; see clock section).
 # Show per-core utilization lines.
 per_core = true
 
@@ -49,8 +52,7 @@ show_freq = true
 show_watts = false
 
 [plugins.config.memory]
-# Optional per-plugin collection interval override.
-# interval = "2s"
+# interval = "2s"  — override update_interval for this plugin (non-overlapping; see clock section).
 # Show swap usage.
 show_swap = true
 
@@ -71,8 +73,7 @@ zfs_arc_cached = false
 # disks_filter = []
 
 [plugins.config.network]
-# Optional per-plugin collection interval override.
-# interval = "1s"
+# interval = "1s"  — override update_interval for this plugin (non-overlapping; see clock section).
 # Interface name to monitor (empty selects the first non-loopback interface).
 interface = ""
 
@@ -81,12 +82,10 @@ show_ipv6 = true
 
 [plugins.config.battery]
 # No battery-specific options yet.
-# Optional per-plugin collection interval override.
-# interval = "5s"
+# interval = "5s"  — override update_interval for this plugin (non-overlapping; see clock section).
 
 [plugins.config.process]
-# Optional per-plugin collection interval override.
-# interval = "2s"
+# interval = "2s"  — override update_interval for this plugin (non-overlapping; see clock section).
 # Show process tree view with parent-child relationships.
 tree_view = false
 
