@@ -1,9 +1,30 @@
 # IDE / editor
 *.sublime-workspace
 *.sublime-project
+.idea/
+.zed/
+
+# AI assistant instruction files
+.github/copilot-instructions.md
+
+# Build output
+dtop
+
+# Stale theme exports
+*.theme
 
 # Go
 /dtop
 *.exe
 *.test
 *.out
+
+# Local reference and working docs (not for public repo)
+docs/BTOP_REQUIREMENTS_AND_ARCHITECTURE.md
+docs/technical-debt.md
+docs/roadmap.md
+docs/dtop-requirements.md
+docs/code-review-20260402.md
+docs/session-id.md
+CLAUDE.md
+AGENTS.md

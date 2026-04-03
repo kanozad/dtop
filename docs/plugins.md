@@ -175,7 +175,7 @@ func TestViewWithBattery(t *testing.T) {
 For layout regression tests, use `internal/testutil.CheckGolden`. It strips ANSI codes and compares against a stored fixture in `testdata/<name>.golden`. Run with `-update` to regenerate:
 
 ```go
-import "mld.com/dtop/internal/testutil"
+import "github.com/kanozad/dtop/internal/testutil"
 
 func TestViewGolden(t *testing.T) {
     b := New()

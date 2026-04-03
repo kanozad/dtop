@@ -11,10 +11,7 @@ Licensed under the Apache License, Version 2.0
 
 btop++ served as the primary design reference for dtop's feature set,
 plugin architecture, data contracts, and UI conventions. No source code
-from btop++ was copied or translated into this project. The architecture
-document at docs/BTOP_REQUIREMENTS_AND_ARCHITECTURE.md is a
-reverse-engineered specification written by the dtop authors and is not
-derived from btop++ documentation.
+from btop++ was copied or translated into this project.
 
 The Apache License, Version 2.0 is reproduced in full in the LICENSE file
 at the root of this repository.

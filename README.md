@@ -98,6 +98,5 @@ Copyright 2026 Douglas M. Kanoza. Licensed under the Apache License, Version 2.0
 ## Docs
 
 - `docs/architecture.md` — high-level architecture and data flow
-- `docs/roadmap.md` — current status and remaining work
 - `docs/theme-schema.md` — theme file schema and bundled themes
 - `docs/plugins.md` — how to build/register plugins
