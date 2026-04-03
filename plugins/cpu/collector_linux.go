@@ -45,10 +45,16 @@ func readCPUStats(prev map[string]cpuTimes, opts collectOpts) (types.CPUStats, m
 		stats.FrequencyMHz = readCoreFrequencies(stats.Cores)
 		if len(stats.FrequencyMHz) > 0 {
 			var sum float64
+			var count int
 			for _, f := range stats.FrequencyMHz {
-				sum += f
+				if f > 0 {
+					sum += f
+					count++
+				}
 			}
-			stats.FrequencyAvgMHz = sum / float64(len(stats.FrequencyMHz))
+			if count > 0 {
+				stats.FrequencyAvgMHz = sum / float64(count)
+			}
 		}
 	}
 
@@ -194,13 +200,24 @@ func readLoadAvg(path string) (float64, float64, float64, bool) {
 	return load1, load5, load15, true
 }
 
+// preferredZoneTypes lists thermal zone type substrings in priority order.
+// The first match wins; zones not matching any entry are used as a fallback.
+var preferredZoneTypes = []string{"x86_pkg_temp", "cpu-thermal", "acpitz"}
+
 func readTemperature(base string) *float64 {
-	paths, err := filepath.Glob(filepath.Join(base, "thermal_zone*", "temp"))
+	dirs, err := filepath.Glob(filepath.Join(base, "thermal_zone*"))
 	if err != nil {
 		return nil
 	}
-	for _, path := range paths {
-		b, err := os.ReadFile(path)
+
+	type candidate struct {
+		value    float64
+		priority int // lower = more preferred; len(preferredZoneTypes) = fallback
+	}
+	var best *candidate
+
+	for _, dir := range dirs {
+		b, err := os.ReadFile(filepath.Join(dir, "temp"))
 		if err != nil {
 			continue
 		}
@@ -209,31 +226,58 @@ func readTemperature(base string) *float64 {
 			continue
 		}
 		if value > 1000 {
-			value = value / 1000
+			value /= 1000
 		}
-		return &value
+
+		priority := len(preferredZoneTypes) // fallback rank
+		if tb, err := os.ReadFile(filepath.Join(dir, "type")); err == nil {
+			ztype := strings.TrimSpace(string(tb))
+			for i, pref := range preferredZoneTypes {
+				if strings.Contains(ztype, pref) {
+					priority = i
+					break
+				}
+			}
+		}
+
+		if best == nil || priority < best.priority {
+			best = &candidate{value: value, priority: priority}
+		}
+		if best.priority == 0 {
+			break // can't do better than the top preference
+		}
 	}
-	return nil
+
+	if best == nil {
+		return nil
+	}
+	return &best.value
 }
 
 // readCoreFrequencies reads per-core current frequency from cpufreq sysfs.
-// Returns MHz for each core, or nil if cpufreq is unavailable.
+// Returns a slice of length coreCount with MHz values; unavailable cores are
+// represented as 0. Returns nil only if no cores have frequency data at all.
 func readCoreFrequencies(coreCount int) []float64 {
 	if coreCount <= 0 {
 		return nil
 	}
-	freqs := make([]float64, 0, coreCount)
+	freqs := make([]float64, coreCount)
+	any := false
 	for i := 0; i < coreCount; i++ {
 		path := fmt.Sprintf("/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq", i)
 		b, err := os.ReadFile(path)
 		if err != nil {
-			return nil // cpufreq not available
+			continue // core offline or cpufreq unavailable for this core
 		}
 		khz, err := strconv.ParseFloat(strings.TrimSpace(string(b)), 64)
 		if err != nil {
-			return nil
+			continue
 		}
-		freqs = append(freqs, khz/1000.0)
+		freqs[i] = khz / 1000.0
+		any = true
+	}
+	if !any {
+		return nil
 	}
 	return freqs
 }

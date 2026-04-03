@@ -47,10 +47,10 @@ func ContentWidth(totalWidth int) int {
 	return w
 }
 
-// ContentHeight returns the usable inner height after subtracting box
-// title, borders, and padding (default 2 border rows + 2 overhead = 4).
-func ContentHeight(totalHeight int) int {
-	h := totalHeight - 4
+// ContentHeight returns the usable body height given the inner content rows
+// passed to View(). It subtracts 1 for the title row that RenderBox prepends.
+func ContentHeight(height int) int {
+	h := height - 1
 	if h < 1 {
 		return 1
 	}

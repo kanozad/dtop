@@ -19,6 +19,14 @@ import (
 	"mld.com/dtop/pkg/types"
 )
 
+// Reserved plugin.ID keys used to surface non-plugin errors in pluginErrs.
+// The "~" prefix ensures they cannot collide with any real plugin ID.
+const (
+	errKeyConfig plugin.ID = "~config"
+	errKeyPreset plugin.ID = "~preset"
+	errKeyTheme  plugin.ID = "~theme"
+)
+
 type tickMsg struct{}
 type pluginCollectMsg struct {
 	id   plugin.ID
@@ -179,19 +187,14 @@ func (m *Model) maybeReloadConfig() {
 
 	nextCfg, err := config.Load(m.configPath)
 	if err != nil {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["config"] = fmt.Errorf("reload config: %w", err)
+		m.pluginErrs[errKeyConfig] = fmt.Errorf("reload config: %w", err)
 		m.configMTime = modTime
 		return
 	}
 
 	m.applyReloadedConfig(nextCfg)
 	m.configMTime = modTime
-	if m.pluginErrs != nil {
-		delete(m.pluginErrs, "config")
-	}
+	delete(m.pluginErrs, errKeyConfig)
 }
 
 func (m *Model) applyReloadedConfig(nextCfg config.Config) {
@@ -207,10 +210,7 @@ func (m *Model) applyReloadedConfig(nextCfg config.Config) {
 	}
 	nextTheme, err := theme.FromName(nextCfg.Theme.Name)
 	if err != nil {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["config"] = fmt.Errorf("reload theme %q: %w", nextCfg.Theme.Name, err)
+		m.pluginErrs[errKeyConfig] = fmt.Errorf("reload theme %q: %w", nextCfg.Theme.Name, err)
 		return
 	}
 	nextTheme.UTF8 = utf8
@@ -485,15 +485,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.pluginInFlight[msg.id] = false
 		if msg.err != nil {
-			if m.pluginErrs == nil {
-				m.pluginErrs = map[plugin.ID]error{}
-			}
 			m.pluginErrs[msg.id] = msg.err
 			return m, nil
 		}
-		if m.pluginErrs != nil {
-			delete(m.pluginErrs, msg.id)
-		}
+		delete(m.pluginErrs, msg.id)
 		m.data[msg.id] = msg.data
 		return m, m.updatePlugin(msg.id, msg)
 	default:
@@ -608,10 +603,7 @@ func (m *Model) toggleBox(id plugin.ID) {
 func (m *Model) applyPreset(slot string) {
 	preset, ok := m.cfg.Presets[slot]
 	if !ok {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["preset"] = fmt.Errorf("preset %s not configured", slot)
+		m.pluginErrs[errKeyPreset] = fmt.Errorf("preset %s not configured", slot)
 		return
 	}
 
@@ -634,25 +626,17 @@ func (m *Model) applyPreset(slot string) {
 			m.hiddenBoxes[p.ID()] = !show
 		}
 	}
-	if m.pluginErrs != nil {
-		delete(m.pluginErrs, "preset")
-	}
+	delete(m.pluginErrs, errKeyPreset)
 }
 
 func (m *Model) importPreset(slot string) {
 	if strings.TrimSpace(m.configPath) == "" {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["preset"] = fmt.Errorf("cannot import preset %s: config path is not set", slot)
+		m.pluginErrs[errKeyPreset] = fmt.Errorf("cannot import preset %s: config path is not set", slot)
 		return
 	}
 	preset, err := config.ImportPreset(m.configPath, slot)
 	if err != nil {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["preset"] = fmt.Errorf("import preset %s: %w", slot, err)
+		m.pluginErrs[errKeyPreset] = fmt.Errorf("import preset %s: %w", slot, err)
 		return
 	}
 	if m.cfg.Presets == nil {
@@ -660,17 +644,12 @@ func (m *Model) importPreset(slot string) {
 	}
 	m.cfg.Presets[slot] = preset
 	if err := config.Save(m.configPath, m.cfg); err != nil {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["preset"] = fmt.Errorf("persist imported preset %s: %w", slot, err)
+		m.pluginErrs[errKeyPreset] = fmt.Errorf("persist imported preset %s: %w", slot, err)
 		return
 	}
 	m.applyPreset(slot)
 	m.configMTime = fileModTime(m.configPath)
-	if m.pluginErrs != nil {
-		delete(m.pluginErrs, "preset")
-	}
+	delete(m.pluginErrs, errKeyPreset)
 }
 
 func (m *Model) savePreset(slot string) {
@@ -690,73 +669,46 @@ func (m *Model) savePreset(slot string) {
 		VisibleBoxes:   visibleBoxes,
 	}
 	if strings.TrimSpace(m.configPath) == "" {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["preset"] = fmt.Errorf("cannot save preset %s: config path is not set", slot)
+		m.pluginErrs[errKeyPreset] = fmt.Errorf("cannot save preset %s: config path is not set", slot)
 		return
 	}
 	if err := config.Save(m.configPath, m.cfg); err != nil {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["preset"] = fmt.Errorf("save preset %s: %w", slot, err)
+		m.pluginErrs[errKeyPreset] = fmt.Errorf("save preset %s: %w", slot, err)
 		return
 	}
 	m.configMTime = fileModTime(m.configPath)
-	if m.pluginErrs != nil {
-		delete(m.pluginErrs, "preset")
-	}
+	delete(m.pluginErrs, errKeyPreset)
 }
 
 func (m *Model) deletePreset(slot string) {
 	if _, ok := m.cfg.Presets[slot]; !ok {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["preset"] = fmt.Errorf("preset %s not configured", slot)
+		m.pluginErrs[errKeyPreset] = fmt.Errorf("preset %s not configured", slot)
 		return
 	}
 	delete(m.cfg.Presets, slot)
 	if strings.TrimSpace(m.configPath) == "" {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["preset"] = fmt.Errorf("cannot delete preset %s: config path is not set", slot)
+		m.pluginErrs[errKeyPreset] = fmt.Errorf("cannot delete preset %s: config path is not set", slot)
 		return
 	}
 	if err := config.Save(m.configPath, m.cfg); err != nil {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["preset"] = fmt.Errorf("delete preset %s: %w", slot, err)
+		m.pluginErrs[errKeyPreset] = fmt.Errorf("delete preset %s: %w", slot, err)
 		return
 	}
 	m.configMTime = fileModTime(m.configPath)
-	if m.pluginErrs != nil {
-		delete(m.pluginErrs, "preset")
-	}
+	delete(m.pluginErrs, errKeyPreset)
 }
 
 func (m *Model) exportPreset(slot string) {
 	preset, ok := m.cfg.Presets[slot]
 	if !ok {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["preset"] = fmt.Errorf("preset %s not configured", slot)
+		m.pluginErrs[errKeyPreset] = fmt.Errorf("preset %s not configured", slot)
 		return
 	}
 	if _, err := config.ExportPreset(m.configPath, slot, preset); err != nil {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["preset"] = fmt.Errorf("export preset %s: %w", slot, err)
+		m.pluginErrs[errKeyPreset] = fmt.Errorf("export preset %s: %w", slot, err)
 		return
 	}
-	if m.pluginErrs != nil {
-		delete(m.pluginErrs, "preset")
-	}
+	delete(m.pluginErrs, errKeyPreset)
 }
 
 func (m *Model) openOptions() {
@@ -852,19 +804,14 @@ func (m *Model) applySelectedTheme() {
 	}
 	nextTheme, err := theme.FromName(selected.Value)
 	if err != nil {
-		if m.pluginErrs == nil {
-			m.pluginErrs = map[plugin.ID]error{}
-		}
-		m.pluginErrs["theme"] = fmt.Errorf("load theme %q: %w", selected.Value, err)
+		m.pluginErrs[errKeyTheme] = fmt.Errorf("load theme %q: %w", selected.Value, err)
 		return
 	}
 	nextTheme.UTF8 = m.theme.UTF8
 	nextTheme.ColorLevel = m.theme.ColorLevel
 	m.theme = nextTheme
 	m.cfg.Theme.Name = selected.Value
-	if m.pluginErrs != nil {
-		delete(m.pluginErrs, "theme")
-	}
+	delete(m.pluginErrs, errKeyTheme)
 }
 
 func (m Model) visiblePlugins() []plugin.Plugin {

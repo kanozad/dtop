@@ -62,7 +62,7 @@ func buildProcessTree(processes []types.ProcessInfo) []types.ProcessInfo {
 	var roots []int
 	for i := range processes {
 		ppid := processes[i].PPID
-		if ppid == 0 || procMap[ppid] == nil {
+		if ppid == 0 || ppid == processes[i].PID || procMap[ppid] == nil {
 			// Root process or parent not in list
 			roots = append(roots, processes[i].PID)
 		} else {

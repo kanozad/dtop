@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -104,30 +103,15 @@ func readSystemCPU() (systemStat, error) {
 	if !haveCPU {
 		return systemStat{}, fmt.Errorf("unexpected /proc/stat format")
 	}
-	var uptime time.Duration
 	if up, err := readSystemUptime(); err == nil {
-		uptime = up
-	}
-	if bootTime.IsZero() && uptime > 0 {
-		bootTime = time.Now().Add(-uptime)
-	}
-	var clockTicks int64
-	if uptime > 0 {
-		seconds := uptime.Seconds()
-		if seconds > 0 {
-			cpuCount := runtime.NumCPU()
-			if cpuCount < 1 {
-				cpuCount = 1
-			}
-			hz := float64(total) / (seconds * float64(cpuCount))
-			if hz > 0 {
-				clockTicks = int64(hz + 0.5)
-			}
+		if bootTime.IsZero() {
+			bootTime = time.Now().Add(-up)
 		}
 	}
-	if clockTicks <= 0 {
-		clockTicks = 100
-	}
+
+	// Linux always presents jiffies to userspace at USER_HZ = 100,
+	// regardless of the kernel's internal CONFIG_HZ.
+	const clockTicks int64 = 100
 
 	return systemStat{
 		totalTime:  total,

@@ -138,6 +138,20 @@ func TestBuildProcessTree(t *testing.T) {
 	}
 }
 
+func TestBuildProcessTreeSelfReference(t *testing.T) {
+	// A process whose PPID == PID must not cause infinite recursion.
+	processes := []types.ProcessInfo{
+		{PID: 1, PPID: 0, Command: "init"},
+		{PID: 2, PPID: 2, Command: "self-ref"}, // PPID == PID
+	}
+
+	result := buildProcessTree(processes)
+
+	if len(result) != len(processes) {
+		t.Errorf("buildProcessTree returned %d processes, expected %d", len(result), len(processes))
+	}
+}
+
 func TestParseSortField(t *testing.T) {
 	tests := []struct {
 		input    string
