@@ -1,6 +1,13 @@
 # btop++ Requirements and Architecture Documentation
 
-> Reference only: This document is a reverse-engineered specification of the original btop++ application. Use it as a source-of-truth reference when aligning DTOP, but do not treat the C++-specific APIs or build flags as implementation requirements; DTOP should remain language- and platform-portable.
+> **Reference document — written by the dtop authors, not derived from btop++ documentation.**
+> This is a reverse-engineered specification of btop++ (https://github.com/aristocratos/btop),
+> produced by studying its behaviour and public source code. It was used as a design reference
+> when building dtop. Do not treat C++-specific APIs or build flags as dtop implementation
+> requirements; dtop is an independent Go reimplementation and must remain language- and
+> platform-portable.
+>
+> btop++ is copyright 2021 Aristocratos (jakob@qvantnet.com), Apache License 2.0.
 
 ## Executive Summary
 

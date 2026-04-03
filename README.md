@@ -83,11 +83,21 @@ Common pitfalls:
 ## Install and release
 
 - Install the CLI locally: `go install ./cmd/dtop@latest`
-- Cutting a release: tag the repo (e.g., `v0.2.0`); users can then `go install mld.com/dtop/cmd/dtop@v0.2.0`.
+- Cutting a release: tag the repo (e.g., `v0.2.0`); users can then `go install github.com/kanozad/dtop/cmd/dtop@v0.2.0`.
+
+## Acknowledgments
+
+dtop was heavily inspired by [btop++](https://github.com/aristocratos/btop) by Aristocratos, which is an exceptional C++ terminal resource monitor. btop++ served as the primary design reference for dtop's feature set, plugin architecture, data contracts, and UI conventions. No source code from btop++ was copied or translated into this project.
+
+btop++ is copyright 2021 Aristocratos and licensed under the Apache License, Version 2.0. See the `NOTICE` file for full attribution details.
+
+## License
+
+Copyright 2026 Douglas M. Kanoza. Licensed under the Apache License, Version 2.0. See `LICENSE` for the full text.
 
 ## Docs
 
 - `docs/architecture.md` — high-level architecture and data flow
-- `docs/dtop-requirements.md` — roadmap and design goals
+- `docs/roadmap.md` — current status and remaining work
 - `docs/theme-schema.md` — theme file schema and bundled themes
 - `docs/plugins.md` — how to build/register plugins
