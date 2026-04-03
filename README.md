@@ -4,13 +4,17 @@ DTOP is a Go TUI system monitor inspired by btop++ with a plugin-based architect
 
 ## Status
 
-Phase 2 is complete. The current built-in plugins are:
+Core feature set complete (Phases 1–5). Built-in plugins:
 
 - `clock`
-- `cpu` (Linux collector; optional temperature if available)
-- `memory`
-- `network`
-- `process` (Linux collector; process list with sorting, filtering, tree view, scrolling)
+- `cpu` (Linux; per-core utilization, temperature, frequency, RAPL power, container-aware)
+- `memory` (RAM/swap/disk/ZFS, I/O stats)
+- `network` (bandwidth graphs, IPv4/IPv6, totals)
+- `process` (Linux; sorting, filtering, tree view, scrolling, signal/renice, detail drill-in)
+- `gpu` (Linux sysfs; NVML/ROCm FFI for discrete Nvidia/AMD GPUs)
+- `battery` (Linux; charge %, status, power draw)
+
+Non-Linux collectors are stub placeholders (Phase 4 deferred).
 
 ## Requirements
 
@@ -40,7 +44,9 @@ An example config lives at `docs/dtop.toml.example`.
 CPU plugin options:
 
 - `per_core` (bool): show per-core utilization lines
-- `show_temp` (bool): attempt to read CPU temperature (Linux)
+- `show_temp` (bool): attempt to read CPU temperature (Linux, `/sys/class/thermal`)
+- `show_freq` (bool, default true): show average CPU frequency via cpufreq sysfs
+- `show_watts` (bool): show CPU package power via RAPL (Linux, requires read access to `/sys/class/powercap`)
 
 Process plugin options:
 
@@ -58,16 +64,15 @@ Preset controls: press `p`, then slot `0-9` to load; `P` then slot to save; `D` 
 ## Tests and formatting
 
 ```bash
-go test ./...
+go test -race ./...
 gofmt -w .
 ```
 
-Tip: the test command is `go test ./...` with no space between `./` and the ellipsis; `go test ./ ...` is interpreted as two paths (`.` and `../..`) and will fail.
-
 Common pitfalls:
 
-- Example config: start from `docs/dtop.toml.example`, copy to `~/.config/dtop/dtop.toml`, then tweak.
+- Example config: start from `docs/dtop.toml.example`, copy to `~/.config/dtop/dtop.conf`, then tweak.
 - If you add a new plugin, remember to register its factory in `cmd/dtop/main.go` or it won’t be instantiated.
+- Golden-file tests live in `plugins/*/testdata/*.golden`. Re-generate after intentional layout changes with `go test ./plugins/<name>/ -run Golden -update`.
 
 ## Tooling
 

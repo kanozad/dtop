@@ -13,6 +13,7 @@ type Plugin interface {
     Update(msg tea.Msg) tea.Cmd
     View(data collector.Data, width, height int, th theme.Theme) string
 }
+```
 
 Optional: implement `SizeHinter` to declare vertical sizing preferences:
 
@@ -89,7 +90,9 @@ Key rules:
 
 ## Config validation
 
-Implement `AllowedConfigKeys()` to return the keys your plugin accepts. The `interval` key is always allowed automatically (reserved for the per-plugin scheduler cadence).
+Implement `AllowedConfigKeys()` to return the keys your plugin accepts. Two keys are always allowed automatically and do not need to be declared:
+- `interval` — per-plugin scheduler cadence override (e.g. `"1s"`).
+- `column` — 1-based grid column pin for this plugin (used by `renderPluginsGrid`).
 
 ```go
 func (b *Battery) AllowedConfigKeys() []string {
@@ -166,6 +169,26 @@ func TestViewWithBattery(t *testing.T) {
         t.Fatal("expected non-empty view")
     }
 }
+```
+
+### Golden-file tests
+For layout regression tests, use `internal/testutil.CheckGolden`. It strips ANSI codes and compares against a stored fixture in `testdata/<name>.golden`. Run with `-update` to regenerate:
+
+```go
+import "mld.com/dtop/internal/testutil"
+
+func TestViewGolden(t *testing.T) {
+    b := New()
+    th := theme.Default()
+    stats := types.BatteryStats{Present: true, Capacity: 60, Status: "Discharging"}
+    out := b.View(stats, 60, 10, th)
+    testutil.CheckGolden(t, "battery_60pct", out)
+}
+```
+
+```
+go test ./plugins/battery/ -run TestViewGolden -update   # write golden
+go test ./plugins/battery/ -run TestViewGolden            # verify
 ```
 
 ### Collector tests (Linux sysfs)

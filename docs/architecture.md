@@ -24,6 +24,7 @@ This document summarizes the major components and data flow in DTOP, aligned wit
 ## UI loop and rendering
 - Layout supports vertical, grid, and flow modes via `internal/ui` helpers; flow auto-computes columns to fit height while enforcing per-box minimums.
 - Reactive sizing: each plugin declares a `SizeHint` (MinH, PrefH, MaxH, Weight). The layout engine allocates minimums first, then distributes surplus height proportionally by weight, capping at MaxH. Compact plugins (battery: MaxH=3, clock: MaxH=1) stop growing early; data-heavy plugins (process, CPU) absorb remaining space. This replaces the previous equal-split approach.
+- Column pinning: in grid/flow modes, plugins can declare a preferred column via `column = <N>` (1-based) in their `[plugins.config.<id>]` section. `groupPluginsByColumn` honours these preferences; unpinned plugins are distributed evenly in declaration order.
 - Box chrome accounting: each plugin box has non-content overhead (border + padding) exposed via `Theme.BoxChrome()`. The layout engine subtracts chrome before allocation. Plugins that cannot meet their MinH are hidden, and a muted warning is displayed.
 - Render order: clear region → borders → text/graphs → highlights → flush; prefer alt‑screen and synchronized output when supported.
 - Graphs auto‑scale; net graphs never below 10 KiB/s; clamp history length to drawn width.
