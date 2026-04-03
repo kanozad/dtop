@@ -48,6 +48,9 @@ type Process struct {
 	prevProc map[int]procStat
 	prevSys  systemStat
 
+	// uidCache maps UID → username to avoid a lookup syscall per process per tick.
+	uidCache map[int]string
+
 	// Scrolling state
 	scrollOffset  int
 	pageSize      int
@@ -75,6 +78,7 @@ func New() *Process {
 		},
 		prevProc:      make(map[int]procStat),
 		treeCollapsed: make(map[int]struct{}),
+		uidCache:      make(map[int]string),
 		mode:          modeList,
 	}
 }
@@ -98,7 +102,7 @@ func (p *Process) Collect(context.Context) (collector.Data, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	stats, nextProc, nextSys, err := readProcessStats(p.prevProc, p.prevSys, p.cfg)
+	stats, nextProc, nextSys, err := readProcessStats(p.prevProc, p.prevSys, p.cfg, p.uidCache)
 	if err != nil {
 		return nil, err
 	}

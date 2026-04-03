@@ -62,13 +62,12 @@ func readCPUStats(prev map[string]cpuTimes, opts collectOpts) (types.CPUStats, m
 	if opts.showWatts {
 		rs = readRAPLEnergy()
 		if rs.energy > 0 && opts.prevRAPLEnergy > 0 && !opts.prevRAPLTime.IsZero() {
-			deltaEnergy := rs.energy - opts.prevRAPLEnergy
-			// Handle counter wrap-around (32-bit or implementation-specific).
 			if rs.energy < opts.prevRAPLEnergy {
-				deltaEnergy = rs.energy // skip this sample on wrap
+				// Counter wrapped; skip this sample.
 			} else {
 				deltaTime := now.Sub(opts.prevRAPLTime).Seconds()
 				if deltaTime > 0 {
+					deltaEnergy := rs.energy - opts.prevRAPLEnergy
 					watts := float64(deltaEnergy) / 1_000_000.0 / deltaTime
 					stats.PowerWatts = &watts
 				}

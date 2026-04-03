@@ -4,6 +4,7 @@ package process
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"os/user"
@@ -17,7 +18,7 @@ import (
 )
 
 // readProcessStats collects process information from /proc on Linux.
-func readProcessStats(prevProc map[int]procStat, prevSys systemStat, cfg Config) (types.ProcessStats, map[int]procStat, systemStat, error) {
+func readProcessStats(prevProc map[int]procStat, prevSys systemStat, cfg Config, uidCache map[int]string) (types.ProcessStats, map[int]procStat, systemStat, error) {
 	stats := types.ProcessStats{
 		Timestamp: time.Now(),
 		SortBy:    parseSortField(cfg.SortBy),
@@ -32,7 +33,7 @@ func readProcessStats(prevProc map[int]procStat, prevSys systemStat, cfg Config)
 	}
 
 	// Read all processes from /proc
-	processes, nextProc, err := collectProcesses(prevProc, prevSys, sysStat, cfg.UseSmaps)
+	processes, nextProc, err := collectProcesses(prevProc, prevSys, sysStat, cfg.UseSmaps, uidCache)
 	if err != nil {
 		return stats, prevProc, prevSys, err
 	}
@@ -45,12 +46,12 @@ func readProcessStats(prevProc map[int]procStat, prevSys systemStat, cfg Config)
 	}
 	stats.FilteredCount = len(processes)
 
-	// Sort processes
-	sortProcesses(processes, stats.SortBy, stats.SortDesc)
-
-	// Build tree view if enabled
+	// Tree mode re-orders by parent-child-PID; sorting beforehand has no effect
+	// on the output, so skip it to avoid wasted work.
 	if cfg.TreeView {
 		processes = buildProcessTree(processes)
+	} else {
+		sortProcesses(processes, stats.SortBy, stats.SortDesc)
 	}
 
 	stats.Processes = processes
@@ -122,7 +123,7 @@ func readSystemCPU() (systemStat, error) {
 }
 
 // collectProcesses reads all processes from /proc and calculates CPU percentages.
-func collectProcesses(prevProc map[int]procStat, prevSys systemStat, curSys systemStat, useSmaps bool) ([]types.ProcessInfo, map[int]procStat, error) {
+func collectProcesses(prevProc map[int]procStat, prevSys systemStat, curSys systemStat, useSmaps bool, uidCache map[int]string) ([]types.ProcessInfo, map[int]procStat, error) {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		return nil, nil, err
@@ -148,7 +149,7 @@ func collectProcesses(prevProc map[int]procStat, prevSys systemStat, curSys syst
 			continue
 		}
 
-		proc, curStat, err := readProcInfo(pid, prevProc, sysDelta, curSys, useSmaps)
+		proc, curStat, err := readProcInfo(pid, prevProc, sysDelta, curSys, useSmaps, uidCache)
 		if err != nil {
 			// Process may have exited, skip
 			continue
@@ -162,7 +163,7 @@ func collectProcesses(prevProc map[int]procStat, prevSys systemStat, curSys syst
 }
 
 // readProcInfo reads information for a single process.
-func readProcInfo(pid int, prevProc map[int]procStat, sysDelta float64, curSys systemStat, useSmaps bool) (types.ProcessInfo, procStat, error) {
+func readProcInfo(pid int, prevProc map[int]procStat, sysDelta float64, curSys systemStat, useSmaps bool, uidCache map[int]string) (types.ProcessInfo, procStat, error) {
 	procPath := filepath.Join("/proc", strconv.Itoa(pid))
 
 	// Read /proc/[pid]/stat for most information
@@ -187,8 +188,12 @@ func readProcInfo(pid int, prevProc map[int]procStat, sysDelta float64, curSys s
 		status = make(map[string]string)
 	}
 
-	// Get username
-	username := getUserName(stat.uid)
+	// Get username, using the per-collector cache to avoid a lookup syscall on every tick.
+	username, ok := uidCache[stat.uid]
+	if !ok {
+		username = getUserName(stat.uid)
+		uidCache[stat.uid] = username
+	}
 
 	// Read command line
 	cmdline := readProcCmdline(procPath)
@@ -268,7 +273,7 @@ func readProcStat(procPath string, bootTime time.Time, clockTicks int64) (statIn
 
 	// Parse fields after ')'
 	fields := strings.Fields(line[commEnd+1:])
-	if len(fields) < 50 {
+	if len(fields) < 20 {
 		return statInfo{}, procStat{}, fmt.Errorf("insufficient fields in stat")
 	}
 
@@ -329,7 +334,7 @@ func readProcStatus(procPath string) (map[string]string, error) {
 	}
 
 	result := make(map[string]string)
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
 		line := scanner.Text()
 		parts := strings.SplitN(line, ":", 2)

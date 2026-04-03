@@ -9,7 +9,7 @@ vet:
 	go vet $(PKGS)
 
 test:
-	go test $(PKGS)
+	go test -race $(PKGS)
 
 lint:
 	golangci-lint run
