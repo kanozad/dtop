@@ -1,11 +1,9 @@
-version: "2"
-
 run:
   timeout: 5m
   go: "1.24"
 
 linters:
-  default: none
+  disable-all: true
   enable:
     - govet
     - staticcheck
@@ -13,22 +11,21 @@ linters:
     - unused
     - errcheck
     - revive
-  settings:
-    errcheck:
-      exclude-functions:
-        - "(*os.File).Close"
-    revive:
-      rules:
-        - name: exported
-          disabled: true
-        - name: package-comments
-          disabled: true
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - "(*os.File).Close"
+  revive:
+    rules:
+      - name: exported
+        disabled: true
+      - name: package-comments
+        disabled: true
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
 
 output:
-  sort-order:
-    - linter
-    - file
+  sort-results: true
