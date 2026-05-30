@@ -166,6 +166,13 @@ func parseCPUTimes(fields []string) (uint64, uint64, error) {
 	var total uint64
 	var idle uint64
 	for i, field := range fields {
+		// Fields are: user nice system idle iowait irq softirq steal guest
+		// guest_nice. The kernel already counts guest inside user and
+		// guest_nice inside nice, so summing those (index >= 8) would
+		// double-count them. Stop the total at steal (index 7).
+		if i >= 8 {
+			break
+		}
 		value, err := strconv.ParseUint(field, 10, 64)
 		if err != nil {
 			return 0, 0, err

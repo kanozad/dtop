@@ -21,9 +21,10 @@ type GraphOpts struct {
 
 // RenderGraph draws a braille sparkline from a time-series data slice.
 //
-// Width is the number of character columns (each column encodes 2 data points
-// horizontally via braille dots). Height is the number of text rows (each row
-// encodes 4 vertical levels via braille dots).
+// Width is the number of character columns; each column renders one data point
+// using only the left column of the braille cell. Height is the number of text
+// rows, and each row encodes 4 vertical levels via braille dots (so vertical
+// resolution is height*4).
 //
 // The data slice should already be sized to width (one data point per column).
 // If len(data) < width, the graph is right-aligned with empty columns on the

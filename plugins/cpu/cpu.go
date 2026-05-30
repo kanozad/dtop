@@ -61,6 +61,12 @@ func (c *CPU) Init(_ context.Context, cfg map[string]any) error {
 	return nil
 }
 
+func (c *CPU) Reconfigure(cfg map[string]any) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cfg = parseConfig(c.cfg, cfg)
+}
+
 func (c *CPU) Collect(context.Context) (collector.Data, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

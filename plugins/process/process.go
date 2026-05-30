@@ -98,17 +98,36 @@ func (p *Process) Init(_ context.Context, cfg map[string]any) error {
 	return nil
 }
 
-func (p *Process) Collect(context.Context) (collector.Data, error) {
+// Reconfigure applies updated config at runtime, mirroring Init. It re-derives
+// followPID from the new config so a reload reflects the file's intent.
+func (p *Process) Reconfigure(cfg map[string]any) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.cfg = parseConfig(p.cfg, cfg)
+	p.followPID = p.cfg.FollowPID
+}
 
-	stats, nextProc, nextSys, err := readProcessStats(p.prevProc, p.prevSys, p.cfg, p.uidCache)
+func (p *Process) Collect(context.Context) (collector.Data, error) {
+	// Snapshot the inputs under the lock, then run the (potentially slow)
+	// /proc scan unlocked so View/Update on the main loop don't block on it.
+	// Collects are serialized per-plugin by the scheduler, so prevProc/prevSys/
+	// uidCache have no other concurrent accessor.
+	p.mu.Lock()
+	cfg := p.cfg
+	prevProc := p.prevProc
+	prevSys := p.prevSys
+	uidCache := p.uidCache
+	p.mu.Unlock()
+
+	stats, nextProc, nextSys, err := readProcessStats(prevProc, prevSys, cfg, uidCache)
 	if err != nil {
 		return nil, err
 	}
 
+	p.mu.Lock()
 	p.prevProc = nextProc
 	p.prevSys = nextSys
+	p.mu.Unlock()
 
 	return stats, nil
 }
@@ -351,6 +370,18 @@ func (p *Process) renderProcesses(processes []types.ProcessInfo, startIdx, endId
 	return lines
 }
 
+// Process table column field widths, shared by buildColumnHeader and
+// formatProcess so the header row and data rows always align. Each fixed column
+// is followed by a single space separator in both renderers, so a column's
+// total on-screen width is its field width + 1.
+const (
+	colWidthPID   = 6
+	colWidthUser  = 10
+	colWidthState = 2
+	colWidthCPU   = 6 // "%5.1f%%" renders up to 6 cells
+	colWidthMem   = 7
+)
+
 // buildColumnHeader renders the column header row with sort indicator.
 func buildColumnHeader(sortBy types.ProcessSortField, width int, th theme.Theme) string {
 	cols := []struct {
@@ -358,11 +389,11 @@ func buildColumnHeader(sortBy types.ProcessSortField, width int, th theme.Theme)
 		field types.ProcessSortField
 		w     int
 	}{
-		{"PID", types.SortByPID, 8},
-		{"USER", types.SortByUser, 11},
-		{"S", types.ProcessSortField(-1), 3}, // state, not sortable by this name
-		{"CPU%", types.SortByCPU, 7},
-		{"MEM", types.SortByMemory, 8},
+		{"PID", types.SortByPID, colWidthPID + 1},
+		{"USER", types.SortByUser, colWidthUser + 1},
+		{"S", types.ProcessSortField(-1), colWidthState + 1}, // state, not sortable by this name
+		{"CPU%", types.SortByCPU, colWidthCPU + 1},
+		{"MEM", types.SortByMemory, colWidthMem + 1},
 		{"CMD", types.SortByName, 0}, // fills remaining
 	}
 	var parts []string
@@ -427,12 +458,8 @@ func formatProcess(proc types.ProcessInfo, width int, treeView bool, selected bo
 	if selected {
 		indicator = "> "
 	}
-	pidWidth := 7
-	userWidth := 10
-	stateWidth := 3
-	cpuWidth := 6
-	memWidth := 8
-	fixedWidth := pidWidth + userWidth + stateWidth + cpuWidth + memWidth + 5 + len(indicator) // spaces
+	// One space separator follows each of the 5 fixed columns.
+	fixedWidth := len(indicator) + colWidthPID + colWidthUser + colWidthState + colWidthCPU + colWidthMem + 5
 
 	cmdWidth := width - fixedWidth
 	if treeView {
@@ -475,13 +502,13 @@ func formatProcess(proc types.ProcessInfo, width int, treeView bool, selected bo
 		}
 	}
 
-	line := fmt.Sprintf("%s%6d %-10s %2s %5.1f%% %7s %s",
+	line := fmt.Sprintf("%s%*d %-*s %*s %*.1f%% %*s %s",
 		indicator,
-		proc.PID,
-		ui.Truncate(proc.User, userWidth),
-		proc.State,
-		proc.CPUPercent,
-		memStr,
+		colWidthPID, proc.PID,
+		colWidthUser, ui.Truncate(proc.User, colWidthUser),
+		colWidthState, proc.State,
+		colWidthCPU-1, proc.CPUPercent,
+		colWidthMem, memStr,
 		ui.Truncate(cmd, cmdWidth),
 	)
 

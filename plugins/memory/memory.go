@@ -59,6 +59,12 @@ func (m *Memory) Init(_ context.Context, cfg map[string]any) error {
 	return nil
 }
 
+func (m *Memory) Reconfigure(cfg map[string]any) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cfg = parseConfig(m.cfg, cfg)
+}
+
 func (m *Memory) Collect(context.Context) (collector.Data, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

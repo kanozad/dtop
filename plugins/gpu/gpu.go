@@ -42,6 +42,13 @@ func (g *GPU) Init(_ context.Context, cfg map[string]any) error {
 	return nil
 }
 
+// Reconfigure applies updated config at runtime. cfg is only read from the UI
+// goroutine (View), and Reconfigure is called from the same goroutine, so no
+// additional synchronization is needed.
+func (g *GPU) Reconfigure(cfg map[string]any) {
+	g.cfg = parseConfig(g.cfg, cfg)
+}
+
 func (g *GPU) Collect(context.Context) (collector.Data, error) {
 	return readGPUStats()
 }
