@@ -50,6 +50,12 @@ func (n *Network) Init(_ context.Context, cfg map[string]any) error {
 	return nil
 }
 
+func (n *Network) Reconfigure(cfg map[string]any) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.cfg = parseConfig(n.cfg, cfg)
+}
+
 func (n *Network) Collect(context.Context) (collector.Data, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()

@@ -31,3 +31,11 @@ type SizeHinter interface {
 type HistoryAware interface {
 	UpdateHistory(history *types.HistoryStore, data collector.Data, width int) collector.Data
 }
+
+// Reconfigurable is an optional interface a plugin may implement to accept
+// updated configuration at runtime, e.g. when live config reload detects a
+// change to the plugin's config block. Implementations must be safe to call
+// from the UI goroutine while the plugin's Collect may be running concurrently.
+type Reconfigurable interface {
+	Reconfigure(cfg map[string]any)
+}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -198,11 +200,13 @@ func (m *Model) maybeReloadConfig() {
 }
 
 func (m *Model) applyReloadedConfig(nextCfg config.Config) {
+	prevPluginCfg := m.cfg.Plugins.Config
 	m.cfg.UpdateInterval = nextCfg.UpdateInterval
 	m.cfg.Layout = nextCfg.Layout
 	m.cfg.LiveReload = nextCfg.LiveReload
 	m.cfg.Presets = nextCfg.Presets
 	m.cfg.Plugins.Config = nextCfg.Plugins.Config
+	m.reconfigurePlugins(prevPluginCfg, nextCfg.Plugins.Config)
 	m.refreshPluginSchedules(m.now())
 
 	utf8 := m.theme.UTF8
@@ -218,6 +222,23 @@ func (m *Model) applyReloadedConfig(nextCfg config.Config) {
 	nextTheme.ColorLevel = m.theme.ColorLevel
 	m.theme = nextTheme
 	m.cfg.Theme = nextCfg.Theme
+}
+
+// reconfigurePlugins pushes updated config blocks into plugins that implement
+// plugin.Reconfigurable, but only for plugins whose config block actually
+// changed, so a reload doesn't needlessly reset runtime plugin state.
+func (m *Model) reconfigurePlugins(prev, next map[string]map[string]any) {
+	for _, p := range m.plugins {
+		rc, ok := p.(plugin.Reconfigurable)
+		if !ok {
+			continue
+		}
+		id := string(p.ID())
+		if reflect.DeepEqual(prev[id], next[id]) {
+			continue
+		}
+		rc.Reconfigure(next[id])
+	}
 }
 
 type Model struct {
@@ -585,12 +606,28 @@ func (m Model) View() string {
 				lines = append(lines, errLine)
 			}
 		}
-		for id, err := range m.pluginErrs {
-			if _, ok := seen[id]; ok || err == nil {
+		// Render remaining (non-plugin) errors in a fixed order so their lines
+		// don't reorder between frames. Reserved keys first, then any others
+		// sorted for stability.
+		for _, id := range []plugin.ID{errKeyConfig, errKeyPreset, errKeyTheme} {
+			if _, ok := seen[id]; ok {
 				continue
 			}
-			errLine := m.theme.Error.Render(fmt.Sprintf("%s: %v", id, err))
-			lines = append(lines, errLine)
+			if err := m.pluginErrs[id]; err != nil {
+				seen[id] = struct{}{}
+				lines = append(lines, m.theme.Error.Render(fmt.Sprintf("%s: %v", id, err)))
+			}
+		}
+		others := make([]string, 0, len(m.pluginErrs))
+		for id := range m.pluginErrs {
+			if _, ok := seen[id]; ok || m.pluginErrs[id] == nil {
+				continue
+			}
+			others = append(others, string(id))
+		}
+		sort.Strings(others)
+		for _, id := range others {
+			lines = append(lines, m.theme.Error.Render(fmt.Sprintf("%s: %v", id, m.pluginErrs[plugin.ID(id)])))
 		}
 	}
 

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -29,6 +30,10 @@ func Run(ctx context.Context, cfg config.Config, plugins []plugin.Plugin, config
 	_, runErr := p.Run()
 
 	cancel()
-	shutdownErr := plugin.ShutdownAll(ctx, plugins)
+	// Shutdown gets its own bounded context: the one above is now cancelled,
+	// so reusing it would defeat any ctx-aware cleanup a plugin performs.
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	shutdownErr := plugin.ShutdownAll(shutdownCtx, plugins)
 	return errors.Join(runErr, shutdownErr)
 }

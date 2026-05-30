@@ -146,9 +146,9 @@ func AllocateHeights(hints []SizeHint, totalHeight int) []int {
 				break
 			}
 
-			cap := capFor(h)
-			if cap > 0 && alloc[i]+share > cap {
-				share = cap - alloc[i]
+			maxH := capFor(h)
+			if maxH > 0 && alloc[i]+share > maxH {
+				share = maxH - alloc[i]
 				if share < 0 {
 					share = 0
 				}
@@ -173,8 +173,8 @@ func AllocateHeights(hints []SizeHint, totalHeight int) []int {
 		if capped[i] || hints[i].Weight == 0 {
 			continue
 		}
-		cap := capFor(hints[i])
-		if cap > 0 && alloc[i] >= cap {
+		maxH := capFor(hints[i])
+		if maxH > 0 && alloc[i] >= maxH {
 			continue
 		}
 		alloc[i]++

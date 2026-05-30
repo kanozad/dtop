@@ -294,14 +294,13 @@ func readProcStat(procPath string, bootTime time.Time, clockTicks int64) (statIn
 		}
 	}
 
-	// Convert starttime (clock ticks since boot) to actual time
+	// Convert starttime (clock ticks since boot) to actual time. starttime is
+	// measured from boot, so without a known boot time we can't derive a real
+	// wall-clock value; leave it zero (rendered as "n/a") rather than guess.
 	startTime := time.Time{}
 	if !bootTime.IsZero() && clockTicks > 0 {
 		seconds := float64(starttime) / float64(clockTicks)
 		startTime = bootTime.Add(time.Duration(seconds * float64(time.Second)))
-	} else if clockTicks > 0 {
-		seconds := float64(starttime) / float64(clockTicks)
-		startTime = time.Now().Add(-time.Duration(seconds * float64(time.Second)))
 	}
 
 	info := statInfo{
