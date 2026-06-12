@@ -1,31 +1,43 @@
+version: "2"
 run:
-  timeout: 5m
   go: "1.24"
-
 linters:
-  disable-all: true
+  default: none
   enable:
-    - govet
-    - staticcheck
-    - ineffassign
-    - unused
     - errcheck
+    - govet
+    - ineffassign
     - revive
-
-linters-settings:
-  errcheck:
-    exclude-functions:
-      - "(*os.File).Close"
-  revive:
-    rules:
-      - name: exported
-        disabled: true
-      - name: package-comments
-        disabled: true
-
+    - staticcheck
+    - unused
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*os.File).Close
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-
-output:
-  sort-results: true
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

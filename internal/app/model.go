@@ -331,7 +331,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Delegate mouse events to plugins (e.g. scroll in process list).
 		return m, m.updatePlugins(msg)
 	case tea.KeyMsg:
-		if msg.Type == tea.KeyCtrlC || msg.String() == "q" {
+		if msg.Type == tea.KeyCtrlC {
+			if m.cancel != nil {
+				m.cancel()
+			}
+			return m, tea.Quit
+		}
+		// While a plugin is consuming raw key input (e.g. process filter
+		// editing), global shortcuts like "q" must not fire; Ctrl+C above
+		// stays available as the escape hatch.
+		if m.pluginCapturingInput() {
+			return m, m.updatePlugins(msg)
+		}
+		if msg.String() == "q" {
 			if m.cancel != nil {
 				m.cancel()
 			}
@@ -850,6 +862,17 @@ func (m *Model) applySelectedTheme() {
 	m.theme = nextTheme
 	m.cfg.Theme.Name = selected.Value
 	delete(m.pluginErrs, errKeyTheme)
+}
+
+// pluginCapturingInput reports whether any visible plugin is currently
+// consuming raw key input via plugin.InputCapturer.
+func (m Model) pluginCapturingInput() bool {
+	for _, p := range m.visiblePlugins() {
+		if ic, ok := p.(plugin.InputCapturer); ok && ic.CapturingInput() {
+			return true
+		}
+	}
+	return false
 }
 
 func (m Model) visiblePlugins() []plugin.Plugin {

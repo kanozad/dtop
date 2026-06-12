@@ -654,6 +654,13 @@ func (p *Process) currentMode() viewMode {
 	return p.mode
 }
 
+// CapturingInput reports whether the plugin is in a modal state (filter
+// editing, detail view, signal chooser) that consumes raw key input, so the
+// app suspends global shortcuts while it is active.
+func (p *Process) CapturingInput() bool {
+	return p.currentMode() != modeList
+}
+
 func (p *Process) startFilterEdit() {
 	p.mu.Lock()
 	defer p.mu.Unlock()

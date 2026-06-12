@@ -32,6 +32,15 @@ type HistoryAware interface {
 	UpdateHistory(history *types.HistoryStore, data collector.Data, width int) collector.Data
 }
 
+// InputCapturer is an optional interface a plugin may implement to signal
+// that it is currently consuming raw keyboard input (e.g. a text entry field
+// or a modal chooser). While any visible plugin reports true, the app must
+// suspend global key shortcuts (quit, toggles, menus) and deliver keys to
+// plugins unmodified; Ctrl+C remains the global escape hatch.
+type InputCapturer interface {
+	CapturingInput() bool
+}
+
 // Reconfigurable is an optional interface a plugin may implement to accept
 // updated configuration at runtime, e.g. when live config reload detects a
 // change to the plugin's config block. Implementations must be safe to call

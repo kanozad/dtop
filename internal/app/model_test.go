@@ -37,6 +37,20 @@ func (p *modelPlugin) View(collector.Data, int, int, theme.Theme) string {
 	return "ok"
 }
 
+type capturingPlugin struct {
+	modelPlugin
+	capturing bool
+	keys      []string
+}
+
+func (p *capturingPlugin) CapturingInput() bool { return p.capturing }
+func (p *capturingPlugin) Update(msg tea.Msg) tea.Cmd {
+	if k, ok := msg.(tea.KeyMsg); ok {
+		p.keys = append(p.keys, k.String())
+	}
+	return nil
+}
+
 type collectCountingPlugin struct {
 	id           plugin.ID
 	name         string
@@ -249,6 +263,73 @@ func TestModelPresetLoadFromKeyWorkflow(t *testing.T) {
 	}
 	if !updated.hiddenBoxes["memory"] {
 		t.Fatalf("expected memory hidden")
+	}
+}
+
+func TestModelInputCaptureSuspendsGlobalShortcuts(t *testing.T) {
+	t.Parallel()
+
+	p := &capturingPlugin{modelPlugin: modelPlugin{id: "process", name: "Processes"}, capturing: true}
+	m := NewModel(context.Background(), nil, config.Default(), theme.Default(), []plugin.Plugin{p}, "")
+
+	// "q" must not quit while the plugin is capturing input; the key goes to
+	// the plugin instead.
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if cmd != nil {
+		if msg := cmd(); msg != nil {
+			if _, isQuit := msg.(tea.QuitMsg); isQuit {
+				t.Fatalf("expected q not to quit while plugin captures input")
+			}
+		}
+	}
+	if len(p.keys) != 1 || p.keys[0] != "q" {
+		t.Fatalf("expected key routed to plugin, got %v", p.keys)
+	}
+
+	// Global shortcuts like help must not fire either.
+	next, _ = next.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
+	if next.(Model).showHelp {
+		t.Fatalf("expected help shortcut suspended while plugin captures input")
+	}
+
+	// Ctrl+C remains the escape hatch.
+	_, cmd = next.(Model).Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if cmd == nil {
+		t.Fatalf("expected ctrl+c to quit")
+	}
+	if _, isQuit := cmd().(tea.QuitMsg); !isQuit {
+		t.Fatalf("expected ctrl+c to produce tea.QuitMsg, got %T", cmd())
+	}
+}
+
+func TestModelInputCaptureIgnoredWhenNotCapturing(t *testing.T) {
+	t.Parallel()
+
+	p := &capturingPlugin{modelPlugin: modelPlugin{id: "process", name: "Processes"}, capturing: false}
+	m := NewModel(context.Background(), nil, config.Default(), theme.Default(), []plugin.Plugin{p}, "")
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if cmd == nil {
+		t.Fatalf("expected q to quit when no plugin captures input")
+	}
+	if _, isQuit := cmd().(tea.QuitMsg); !isQuit {
+		t.Fatalf("expected q to produce tea.QuitMsg, got %T", cmd())
+	}
+}
+
+func TestModelInputCaptureIgnoredWhenPluginHidden(t *testing.T) {
+	t.Parallel()
+
+	p := &capturingPlugin{modelPlugin: modelPlugin{id: "process", name: "Processes"}, capturing: true}
+	m := NewModel(context.Background(), nil, config.Default(), theme.Default(), []plugin.Plugin{p}, "")
+	m.hiddenBoxes["process"] = true
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if cmd == nil {
+		t.Fatalf("expected q to quit when capturing plugin is hidden")
+	}
+	if _, isQuit := cmd().(tea.QuitMsg); !isQuit {
+		t.Fatalf("expected q to produce tea.QuitMsg, got %T", cmd())
 	}
 }
 
